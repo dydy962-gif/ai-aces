@@ -1326,7 +1326,7 @@ function hideKreiSplash(){
         • https://replicate.com</span><br><br>
         <b>Netlify</b> — 사이트 호스팅 + 서버리스 함수<br>
         <span style="font-size:10px;color:var(--muted)">• 용도: 정적 사이트 배포, API 키 안전 보관 (서버리스 함수)<br>
-        • 함수: /netlify/functions/sam-yolo.js (Replicate 호출), /netlify/functions/weather.js (기상청 API)<br>
+        • 함수: /api/sam-yolo.js (Replicate 호출). 날씨는 Open-Meteo 클라이언트 직접 호출.<br>
         • 무료 한도: 함수 월 12만5천번 호출</span><br><br>
         <b>GitHub</b> — 소스 코드 관리<br>
         <span style="font-size:10px;color:var(--muted)">• 저장소: github.com/dydy962-gif/fujigrade<br>
@@ -1722,7 +1722,8 @@ function callSAM3(photoObj, idx){
   var imageData = photoObj.correctedUrl || photoObj.compressedUrl;
   
   /* Step 1: Replicate prediction 시작 — 함수는 1초 안에 끝남 (타임아웃 회피) */
-  fetch('/.netlify/functions/sam-yolo', {
+  /* 2026-05-17: Netlify → Vercel 이전. /.netlify/functions/sam-yolo → /api/sam-yolo */
+  fetch('/api/sam-yolo', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({
@@ -1781,7 +1782,8 @@ function pollSAM3Result(photoObj, predictionId, attempt){
   /* 5초 간격 폴링 — 1초는 Replicate Rate Limit(429) 유발 */
   return new Promise(function(resolve){ setTimeout(resolve, 5000); })
     .then(function(){
-      return fetch('/.netlify/functions/sam-yolo', {
+      /* 2026-05-17: Netlify → Vercel 이전 */
+      return fetch('/api/sam-yolo', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
