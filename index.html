@@ -464,6 +464,10 @@ nav{
 </style>
 <!-- SheetJS (엑셀 내보내기용) - 3번 작업 -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+<!-- jsPDF (PDF 보고서 생성) - 2026-05-17 추가 (D 작업) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.0/jspdf.plugin.autotable.min.js"></script>
 </head>
 <body>
 
@@ -604,6 +608,51 @@ function hideKreiSplash(){
 
 <!-- 분석 탭 -->
 <div id="page-analyze" class="page active">
+
+  <!-- ════════════════════════════════════════════════════
+       (E) 촬영 가이드라인 (2026-05-17 추가)
+       다른 연구원도 같은 조건으로 촬영할 수 있게
+       기본: 접힘. 클릭하면 펼침.
+       ════════════════════════════════════════════════════ -->
+  <details id="photoGuide" style="background:linear-gradient(135deg,rgba(127,211,211,.08),rgba(127,211,211,.02));border:1px solid rgba(127,211,211,.25);border-radius:var(--rl);padding:0;margin-bottom:14px">
+    <summary style="padding:12px 14px;cursor:pointer;font-size:13px;font-weight:600;color:#7fd3d3;display:flex;align-items:center;gap:8px;list-style:none">
+      <span style="font-size:16px">📸</span>
+      <span>촬영 가이드라인 — 정확한 측정을 위해 필독</span>
+      <span style="margin-left:auto;font-size:10px;color:var(--muted);font-weight:400">클릭해서 펼치기/접기</span>
+    </summary>
+    <div style="padding:0 14px 14px 14px;font-size:12px;line-height:1.65;color:var(--cream)">
+      <div style="border-top:1px solid rgba(127,211,211,.15);padding-top:12px;margin-top:4px"></div>
+      
+      <div style="margin-bottom:10px"><b style="color:#7fd3d3">📐 거리 & 각도</b></div>
+      <div style="margin-bottom:6px">• 사과에서 <b>30~50cm 거리</b>를 두고 촬영하세요</div>
+      <div style="margin-bottom:6px">• 사과 위에서 수직으로 내려다보는 각도 (90°)</div>
+      <div style="margin-bottom:14px">• 한 사진에 <b>사과 5~20개</b>가 보이도록 — 너무 많으면 작아져서 부정확</div>
+      
+      <div style="margin-bottom:10px"><b style="color:#7fd3d3">💡 조명 조건</b></div>
+      <div style="margin-bottom:6px">• <b>흐린 날 자연광이 최적</b> — 그림자 거의 없음</div>
+      <div style="margin-bottom:6px">• 직사광선 피하기 — 사과 표면 반사 ↑ → 색 측정 오류</div>
+      <div style="margin-bottom:6px">• 실내라면 백색 LED 사용, 형광등은 색이 누렇게 보임</div>
+      <div style="margin-bottom:14px">• <b>그림자가 사과에 안 닿게</b> — 본인 그림자 주의</div>
+      
+      <div style="margin-bottom:10px"><b style="color:#7fd3d3">📷 사진 설정</b></div>
+      <div style="margin-bottom:6px">• 스마트폰 카메라 기본 설정 (자동) 권장</div>
+      <div style="margin-bottom:6px">• <b>EXIF 데이터 활성화</b> — 설정 → 카메라 → 위치 정보 켜기</div>
+      <div style="margin-bottom:6px">• 보정 필터 끄기 — "비비드", "음식 모드" 같은 거 ✗</div>
+      <div style="margin-bottom:14px">• 가능하면 <b>RAW 또는 최고화질</b>로 저장</div>
+      
+      <div style="margin-bottom:10px"><b style="color:#7fd3d3">🍎 난좌 촬영 팁</b></div>
+      <div style="margin-bottom:6px">• 흰색 EPS 폼 트레이 배경 — 자동 화이트밸런스 기준</div>
+      <div style="margin-bottom:6px">• 사과를 트레이 가운데에 정렬</div>
+      <div style="margin-bottom:6px">• <b>상부 사진 = 꼭지 쪽 보이게</b> / 하부 사진 = 꽃받침 쪽 보이게</div>
+      <div style="margin-bottom:14px">• 같은 농장이면 상부·하부 비슷한 장수로 촬영</div>
+      
+      <div style="margin-bottom:10px"><b style="color:#7fd3d3">⚠ 피해야 할 것</b></div>
+      <div style="margin-bottom:6px">• 노출 과다/부족 (사과 색이 안 보임)</div>
+      <div style="margin-bottom:6px">• 흔들린 사진 (윤곽 흐림 → SAM3 검출 실패)</div>
+      <div style="margin-bottom:6px">• 비닐, 신문지 등 색이 있는 배경</div>
+      <div>• 사과끼리 겹친 상태 — 각자 분리해서 놓기</div>
+    </div>
+  </details>
 
   <!-- 착색 진행률 게이지 -->
   <div class="gauge-section">
@@ -1546,10 +1595,87 @@ function setPhotoMode(m){
   document.getElementById('bMark').textContent=(m==='bottom')?'🔵 하부 영역':'🔴 상부 영역';
 }
 
-/* ── 파일 업로드 (단일 모드) ── */
+/* ── 파일 업로드 (단일 모드) ──
+   (C) 진행률 표시 추가 (2026-05-17): 5장 이상일 때만 표시
+   윈도우 객체에 진행률 상태 저장 — 다른 곳에서 갱신 가능 */
 function onFiles(files){
   if(!files||!files.length) return;
+  
+  /* 5장 이상이면 진행률 패널 표시 */
+  if(files.length >= 5){
+    showBatchProgress(files.length);
+  }
+  
   for(var i=0;i<files.length;i++) addPhoto(files[i]);
+}
+
+/* (C) 일괄 업로드 진행률 UI 표시/갱신 (2026-05-17 추가) */
+function showBatchProgress(total){
+  var existing = document.getElementById('batchProgressPanel');
+  if(existing) existing.remove();
+  
+  var panel = document.createElement('div');
+  panel.id = 'batchProgressPanel';
+  panel.style.cssText = 'position:fixed;bottom:20px;right:20px;background:rgba(15,30,40,.95);border:1px solid rgba(127,211,211,.4);border-radius:10px;padding:14px 18px;min-width:260px;max-width:340px;box-shadow:0 8px 32px rgba(0,0,0,.4);z-index:9999;backdrop-filter:blur(10px)';
+  panel.innerHTML = 
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
+      '<span style="font-size:12px;font-weight:700;color:#7fd3d3">📸 일괄 처리 중</span>' +
+      '<span id="batchProgressClose" style="cursor:pointer;color:var(--muted);font-size:14px;line-height:1" onclick="hideBatchProgress()">×</span>' +
+    '</div>' +
+    '<div id="batchProgressLabel" style="font-size:11px;color:var(--cream);margin-bottom:6px">0 / ' + total + ' 사진 처리 중...</div>' +
+    '<div style="width:100%;height:8px;background:rgba(255,255,255,.08);border-radius:4px;overflow:hidden">' +
+      '<div id="batchProgressBar" style="width:0%;height:100%;background:linear-gradient(90deg,#7fd3d3,#8cc44a);transition:width .3s ease"></div>' +
+    '</div>' +
+    '<div id="batchProgressDetail" style="font-size:10px;color:var(--muted);margin-top:6px;font-family:var(--mm)">대기 중</div>';
+  document.body.appendChild(panel);
+  
+  /* 상태 저장 — addPhoto에서 갱신 */
+  window._batchTotal = total;
+  window._batchDone = 0;
+  window._batchStartTime = Date.now();
+}
+
+/* 진행률 갱신 — addPhoto/SAM3 콜백에서 호출 */
+function updateBatchProgress(detail){
+  var panel = document.getElementById('batchProgressPanel');
+  if(!panel) return;
+  
+  var total = window._batchTotal || 0;
+  var done = window._batchDone || 0;
+  var pct = total > 0 ? Math.round((done/total)*100) : 0;
+  
+  var bar = document.getElementById('batchProgressBar');
+  var label = document.getElementById('batchProgressLabel');
+  var detailEl = document.getElementById('batchProgressDetail');
+  
+  if(bar) bar.style.width = pct + '%';
+  if(label) label.textContent = done + ' / ' + total + ' 완료 (' + pct + '%)';
+  if(detailEl && detail) detailEl.textContent = detail;
+  
+  /* 완료 시 자동 닫기 (2초 뒤) */
+  if(done >= total && total > 0){
+    if(label) label.textContent = '✅ ' + total + '장 모두 완료!';
+    if(detailEl){
+      var elapsed = Math.round((Date.now() - (window._batchStartTime||Date.now()))/1000);
+      detailEl.textContent = '총 ' + elapsed + '초 소요';
+    }
+    setTimeout(hideBatchProgress, 4000);
+  }
+}
+
+function hideBatchProgress(){
+  var panel = document.getElementById('batchProgressPanel');
+  if(panel) panel.remove();
+  window._batchTotal = 0;
+  window._batchDone = 0;
+}
+
+/* 사진 1장 처리 완료 시 호출 */
+function notifyBatchDone(filename){
+  if(window._batchTotal && window._batchTotal > 0){
+    window._batchDone = (window._batchDone || 0) + 1;
+    updateBatchProgress('마지막 처리: ' + (filename || '사진'));
+  }
 }
 
 /* ── 파일 업로드 (박스 모드) ── 
@@ -1839,6 +1965,8 @@ function pollSAM3Result(photoObj, predictionId, attempt){
         if(!apples || apples.length === 0){
           toast('⚠ SAM3가 사과를 찾지 못함');
           setBoxStatus('error');
+          /* (C) 일괄 진행률 — 실패도 카운트 */
+          if(typeof notifyBatchDone === 'function') notifyBatchDone((photoObj.name||'사진')+' (검출0)');
           return;
         }
         photoObj.detectedApples = apples;
@@ -1846,9 +1974,12 @@ function pollSAM3Result(photoObj, predictionId, attempt){
         redraw();
         toast('✅ SAM3 검출 완료: 사과 ' + apples.length + '개 (' + (data.predict_time || '?') + '초)');
         setBoxStatus('detected', apples.length);
+        /* (C) 일괄 진행률 카운트 */
+        if(typeof notifyBatchDone === 'function') notifyBatchDone((photoObj.name||'사진')+' ('+apples.length+'개)');
       } else if(data.status === 'failed' || data.status === 'canceled'){
         toast('⚠ SAM3 처리 실패: ' + (data.error || data.status));
         setBoxStatus('error');
+        if(typeof notifyBatchDone === 'function') notifyBatchDone((photoObj.name||'사진')+' (실패)');
       } else {
         /* 아직 처리 중 → 재시도 */
         return pollSAM3Result(photoObj, predictionId, attempt + 1);
@@ -1858,6 +1989,7 @@ function pollSAM3Result(photoObj, predictionId, attempt){
       console.error('[SAM3 폴링] 오류:', e);
       toast('⚠ 폴링 실패: ' + e.message);
       setBoxStatus('error');
+      if(typeof notifyBatchDone === 'function') notifyBatchDone((photoObj.name||'사진')+' (오류)');
     });
 }
 
@@ -2569,6 +2701,7 @@ function showBoxResult(photoObj){
     html += '<div class="share-bar" style="margin-top:10px">' +
       '<button class="s-btn save" onclick="saveBoxResult()" style="background:var(--accent);color:var(--bg);font-weight:600">💾 결과 저장</button>' +
       '<button class="s-btn save" onclick="saveBoxImg()">📥 이미지 저장</button>' +
+      '<button class="s-btn save" onclick="generatePDFReport()" style="background:rgba(127,211,211,.12);border-color:#7fd3d3;color:#7fd3d3">📄 PDF 보고서</button>' +
       '</div></div>';
     
     panel.innerHTML = html;
@@ -3423,6 +3556,26 @@ function showResult(r, dualInfo){
   if(r.avgL<30) ws+='<div class="warn-item">⚠ 조명 너무 어두움. 밝은 곳에서 재촬영하세요.</div>';
   if(r.avgL>90) ws+='<div class="warn-item">⚠ 과노출. 그늘에서 재촬영하세요.</div>';
   if(!r.cal&&r.mode!=='both') ws+='<div class="warn-item">⚠ 카드 영역 지정 시 정확도가 향상됩니다.</div>';
+  
+  /* ── (F) 측정 신뢰도 표시 (2026-05-17 추가) ──
+     사과 개수 적거나 신뢰도 낮으면 명확한 경고 */
+  if(r.cnt && r.cnt < 3){
+    ws+='<div class="warn-item" style="background:rgba(232,160,32,.15);border-left:3px solid #e8a020">⚠ <b>표본 부족</b> — 검출된 사과가 '+r.cnt+'개뿐입니다. 한 사진에 5개 이상 사과가 보이도록 다시 촬영하시면 정확도가 올라갑니다.</div>';
+  }
+  if(r.conf && r.conf < 60){
+    ws+='<div class="warn-item" style="background:rgba(231,76,60,.15);border-left:3px solid #e74c3c">⚠ <b>판정 신뢰도 낮음 ('+r.conf+'%)</b> — 이 결과는 참고용으로만 사용하세요. 조명을 개선해서 재촬영을 권장합니다.</div>';
+  }
+  /* 색 분산이 크면(같은 사진 안 사과들 색차 ↑) 표시 */
+  if(r.apples && r.apples.length >= 3){
+    var pcts = r.apples.map(function(a){return a.pct||0;});
+    var mean = pcts.reduce(function(s,v){return s+v;},0) / pcts.length;
+    var variance = pcts.reduce(function(s,v){return s+(v-mean)*(v-mean);},0) / pcts.length;
+    var stdev = Math.sqrt(variance);
+    if(stdev > 25){
+      ws+='<div class="warn-item" style="background:rgba(100,181,246,.12);border-left:3px solid #64b5f6">ℹ️ <b>색 분산 큼 (σ='+stdev.toFixed(1)+')</b> — 사과들 사이 착색률 차이가 큽니다. 평균값보다 개별 사과 확인이 의미 있을 수 있습니다.</div>';
+    }
+  }
+  
   document.getElementById('warnBox').innerHTML=ws;
 
   /* ── 농진청 색체계 매칭 표시 (8번 작업) ── */
@@ -5486,6 +5639,182 @@ function exportExcel(activeTab){
   var filename='FujiGrade_기록_'+scope+'_'+ts+'.xlsx';
   XLSX.writeFile(wb,filename);
   toast('📊 엑셀 파일 다운로드: '+filename);
+}
+
+/* ════════════════════════════════════════════════════
+   (D) PDF 보고서 생성 (2026-05-17 추가)
+   현재 측정 결과(aIdx 사진)를 PDF로 출력
+   ════════════════════════════════════════════════════ */
+function generatePDFReport(){
+  /* 라이브러리 체크 */
+  if(typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF){
+    toast('⚠️ PDF 라이브러리 로딩 중. 잠시 후 다시 시도하세요');
+    return;
+  }
+  /* 현재 측정 결과 가져오기 */
+  if(aIdx < 0 || !photos[aIdx]){
+    toast('⚠ 측정 결과가 없습니다');
+    return;
+  }
+  var p = photos[aIdx];
+  var r = p.res || p.boxResult;
+  if(!r){
+    toast('⚠ 측정 완료된 사진이 아닙니다');
+    return;
+  }
+  
+  try {
+    var jsPDF = window.jspdf.jsPDF;
+    var doc = new jsPDF({orientation:'portrait', unit:'mm', format:'a4'});
+    var w = doc.internal.pageSize.getWidth();
+    var y = 15;
+    
+    /* ── 헤더 ── */
+    doc.setFillColor(10, 31, 46);
+    doc.rect(0, 0, w, 30, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(18);
+    doc.text('FujiGrade Report', 14, 14);
+    doc.setFontSize(9);
+    doc.setTextColor(127, 211, 211);
+    doc.text('Apple Coloration Analysis Report', 14, 21);
+    doc.setFontSize(8);
+    doc.setTextColor(180, 180, 180);
+    doc.text('Korea Rural Economic Institute (KREI)', 14, 26);
+    /* 우상단 — 생성 일시 */
+    doc.setFontSize(8);
+    doc.setTextColor(255, 255, 255);
+    var nowStr = new Date().toLocaleString('en-US', {year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'});
+    doc.text('Generated: ' + nowStr, w - 14, 14, {align:'right'});
+    doc.text('v22', w - 14, 21, {align:'right'});
+    
+    y = 42;
+    
+    /* ── 최종 등급 박스 ── */
+    doc.setTextColor(60, 60, 60);
+    doc.setFontSize(10);
+    doc.text('Final Grade', 14, y);
+    y += 6;
+    
+    var gradeColor = r.avgCard || {color:'#888', l:'?', name:'?'};
+    var rgb = hexToRgb(gradeColor.color);
+    doc.setFillColor(rgb.r, rgb.g, rgb.b);
+    doc.roundedRect(14, y, w - 28, 22, 3, 3, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(28);
+    doc.text(gradeColor.l || '?', 22, y + 16);
+    /* 등급명을 영문으로 매핑 (한글 깨짐 방지) */
+    var gradeNameEn = {
+      'G1':'Deep Red', 'G2':'Red', 'G3':'Yellow-Red',
+      'G4':'Light Yellow', 'G5':'Light Brown'
+    }[gradeColor.l] || gradeColor.l;
+    doc.setFontSize(11);
+    doc.text(gradeNameEn, 50, y + 11);
+    doc.setFontSize(20);
+    doc.text((r.avg||r.pct||0) + '%', w - 22, y + 16, {align:'right'});
+    doc.setFontSize(8);
+    doc.text('Coloration', w - 22, y + 8, {align:'right'});
+    
+    y += 30;
+    
+    /* ── 측정 정보 테이블 ── */
+    doc.setTextColor(60, 60, 60);
+    doc.setFontSize(10);
+    doc.text('Measurement Details', 14, y);
+    y += 4;
+    
+    /* 한글 깨짐 방지 — 모든 값을 영문화 */
+    var photoModeEn = p.mode === 'bottom' ? 'Bottom' : p.mode === 'both' ? 'Both (Top+Bottom)' : 'Top';
+    var varietyEn = currentVariety === 'hongro' ? 'Hongro' : 'Fuji';
+    var infoRows = [
+      ['Photo Mode', photoModeEn],
+      ['Apples Detected', (r.cnt || (r.apples?r.apples.length:0) || 0) + ' apples'],
+      ['Confidence', (r.conf || 0) + '%'],
+      ['Score', (r.sc || 0) + ' pts'],
+      ['Variety', varietyEn],
+      ['Measurement Date', new Date().toISOString().slice(0,10)]
+    ];
+    /* 위치(한글)는 GPS 좌표만 표시 — 주소는 한글이라 깨짐 */
+    if(p.gps && p.gps.lat){
+      infoRows.push(['Location (GPS)', p.gps.lat.toFixed(5) + ', ' + p.gps.lon.toFixed(5)]);
+    }
+    
+    doc.autoTable({
+      startY: y,
+      head: [['Item', 'Value']],
+      body: infoRows,
+      theme: 'striped',
+      headStyles: {fillColor:[127,211,211], textColor:[10,31,46], fontStyle:'bold'},
+      styles: {fontSize:9, cellPadding:3},
+      margin: {left:14, right:14}
+    });
+    
+    y = doc.lastAutoTable.finalY + 8;
+    
+    /* ── 개별 사과 결과 (있을 경우) ── */
+    if(r.apples && r.apples.length > 0 && y < 230){
+      doc.setFontSize(10);
+      doc.setTextColor(60, 60, 60);
+      doc.text('Individual Apples', 14, y);
+      y += 4;
+      
+      var appleRows = [];
+      for(var i = 0; i < Math.min(r.apples.length, 20); i++){
+        var a = r.apples[i];
+        var aCard = getCard(a.pct || 0);
+        var aGradeName = {
+          'G1':'Deep Red', 'G2':'Red', 'G3':'Yellow-Red',
+          'G4':'Light Yellow', 'G5':'Light Brown'
+        }[aCard.l] || '';
+        appleRows.push([
+          '#' + (i+1),
+          (a.pct || 0) + '%',
+          aCard.l + ' ' + aGradeName
+        ]);
+      }
+      
+      doc.autoTable({
+        startY: y,
+        head: [['No.', 'Coloration', 'Grade']],
+        body: appleRows,
+        theme: 'grid',
+        headStyles: {fillColor:[140,196,74], textColor:[10,31,46]},
+        styles: {fontSize:8, cellPadding:2},
+        margin: {left:14, right:14}
+      });
+      
+      y = doc.lastAutoTable.finalY + 8;
+    }
+    
+    /* ── 푸터 ── */
+    var pageHeight = doc.internal.pageSize.getHeight();
+    doc.setDrawColor(200, 200, 200);
+    doc.line(14, pageHeight - 18, w - 14, pageHeight - 18);
+    doc.setFontSize(7);
+    doc.setTextColor(120, 120, 120);
+    doc.text('FujiGrade v22 · https://fujigrade.vercel.app · KREI', 14, pageHeight - 12);
+    doc.text('This report is auto-generated. For research use only.', 14, pageHeight - 8);
+    
+    /* 저장 */
+    var fname = 'FujiGrade_Report_' + new Date().toISOString().slice(0,10) + '_' + (r.avg || r.pct || 0) + 'pct.pdf';
+    doc.save(fname);
+    toast('📄 PDF 보고서 다운로드: ' + fname);
+    
+  } catch(e){
+    console.error('[PDF] 오류:', e);
+    toast('⚠ PDF 생성 실패: ' + e.message);
+  }
+}
+
+/* PDF용 hex → rgb 변환 헬퍼 */
+function hexToRgb(hex){
+  hex = (hex || '#888').replace('#','');
+  if(hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+  return {
+    r: parseInt(hex.slice(0,2), 16) || 136,
+    g: parseInt(hex.slice(2,4), 16) || 136,
+    b: parseInt(hex.slice(4,6), 16) || 136
+  };
 }
 
 function setRecTab(tab){
