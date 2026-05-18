@@ -371,6 +371,25 @@ nav{
 .rec-stat .sv{font-family:var(--mm);font-size:20px;color:var(--accent);display:block;margin-bottom:2px}
 .rec-stat .sl{color:var(--muted);font-size:11px}
 .rec-entry{background:var(--bg2);border:1px solid var(--border);border-radius:var(--rl);padding:12px 14px;margin-bottom:8px}
+
+/* ── 상부/하부 필터 버튼 (2026-05-17 추가) ── */
+.rec-filter-btn{
+  background:var(--bg2);border:1px solid var(--border);color:var(--muted);
+  padding:6px 12px;border-radius:6px;font-size:11px;cursor:pointer;
+  font-family:inherit;transition:all .15s ease;
+}
+.rec-filter-btn:hover{border-color:var(--accent);color:var(--cream)}
+.rec-filter-btn.active{background:var(--accent);color:var(--bg);border-color:var(--accent);font-weight:700}
+
+/* ── 상부/하부 배지 (기록 카드 안) ── */
+.rec-mode-badge{
+  display:inline-block;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;
+  letter-spacing:.05em;margin-left:6px;vertical-align:middle;
+}
+.rec-mode-badge.top{background:rgba(255,139,139,.15);color:#ff8b8b;border:1px solid rgba(255,139,139,.35)}
+.rec-mode-badge.bottom{background:rgba(100,181,246,.15);color:#64b5f6;border:1px solid rgba(100,181,246,.35)}
+.rec-mode-badge.both{background:rgba(140,196,74,.15);color:#8cc44a;border:1px solid rgba(140,196,74,.35)}
+
 .rec-entry-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
 .rec-entry-grade{
   width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;
@@ -973,6 +992,17 @@ function hideKreiSplash(){
 
       <!-- 결과 표시 영역 -->
       <div id="avgResultPanel" style="margin-top:14px;display:none"></div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════
+         상부/하부 필터 버튼 (2026-05-17 추가)
+         ════════════════════════════════════════════════════ -->
+    <div style="display:flex;gap:6px;margin-bottom:14px;align-items:center;flex-wrap:wrap">
+      <span style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-right:4px">필터</span>
+      <button class="rec-filter-btn active" data-filter="all" onclick="setRecFilter('all')">전체</button>
+      <button class="rec-filter-btn" data-filter="top" onclick="setRecFilter('top')">🔴 상부만</button>
+      <button class="rec-filter-btn" data-filter="bottom" onclick="setRecFilter('bottom')">🔵 하부만</button>
+      <span id="recFilterCount" style="font-size:10px;color:var(--muted);margin-left:auto;font-family:var(--mm)"></span>
     </div>
 
     <div class="section-label" style="margin-bottom:10px">지역별 기록</div>
@@ -5007,9 +5037,34 @@ function renderRecordsPage(){
   }
   tabsEl.innerHTML=tabs;
 
-  /* 해당 탭 기록 필터 */
+  /* 해당 탭 기록 필터 (지역별) */
   var filtered=activeTab==='all'?records:records.filter(function(r){return r.region===activeTab;});
-  if(!filtered.length){contentEl.innerHTML='<div class="rec-empty">저장된 기록이 없습니다.</div>';return;}
+  
+  /* ── 상부/하부 필터 (2026-05-17 추가) ──
+     window._recModeFilter: 'all' | 'top' | 'bottom'
+     photoMode 필드가 없는 옛 기록은 top으로 폴백 (saveBoxResult와 일관) */
+  var modeFilter = window._recModeFilter || 'all';
+  if(modeFilter !== 'all'){
+    filtered = filtered.filter(function(r){
+      var m = r.photoMode || 'top';
+      return m === modeFilter;
+    });
+  }
+  
+  /* 필터 버튼 카운트 표시 (전체 기준) */
+  var countEl = document.getElementById('recFilterCount');
+  if(countEl){
+    var topCnt = records.filter(function(r){return (r.photoMode||'top') === 'top';}).length;
+    var botCnt = records.filter(function(r){return r.photoMode === 'bottom';}).length;
+    countEl.textContent = '상부 ' + topCnt + ' · 하부 ' + botCnt + ' · 표시 ' + filtered.length;
+  }
+  
+  if(!filtered.length){
+    var emptyMsg = modeFilter === 'all' ? '저장된 기록이 없습니다.' : 
+      (modeFilter === 'top' ? '상부 기록이 없습니다.' : '하부 기록이 없습니다.');
+    contentEl.innerHTML='<div class="rec-empty">'+emptyMsg+'</div>';
+    return;
+  }
 
   /* 통계 요약 */
   var pctSum=0,maxT=[],minT=[],rainT=[],sunHoursArr=[];
@@ -5062,8 +5117,14 @@ function renderRecordsPage(){
     html+='<div class="rec-entry-head" style="padding-left:32px">';
     html+='<div class="rec-entry-grade" style="background:'+rec.gradeColor+'">'+rec.grade+'</div>';
     html+='<div class="rec-entry-info">';
-    html+='<div class="rec-entry-pct" style="color:'+rec.gradeColor+'">'+rec.pct+'%</div>';
-    html+='<div class="rec-entry-meta">'+rec.regionName+(rec.address?' · '+rec.address.slice(0,20):'')+(rec.mode==='both'?' · 상+하부':rec.mode==='bottom'?' · 하부':'')+'</div>';
+    /* 착색률 + 상부/하부 배지 (2026-05-17 추가) */
+    var modeBadge = '';
+    var pm = rec.photoMode || 'top'; /* 옛 기록 폴백 */
+    if(pm === 'top') modeBadge = '<span class="rec-mode-badge top">🔴 상부</span>';
+    else if(pm === 'bottom') modeBadge = '<span class="rec-mode-badge bottom">🔵 하부</span>';
+    else if(pm === 'both') modeBadge = '<span class="rec-mode-badge both">상+하부</span>';
+    html+='<div class="rec-entry-pct" style="color:'+rec.gradeColor+'">'+rec.pct+'%'+modeBadge+'</div>';
+    html+='<div class="rec-entry-meta">'+rec.regionName+(rec.address?' · '+rec.address.slice(0,20):'')+'</div>';
     html+='</div>';
     html+='<div class="rec-entry-date" style="margin-right:36px">'+rec.date+(rec.harvestDate?'<br>수확:'+rec.harvestDate.slice(5):'')+'</div>';
     html+='</div>';
@@ -5429,6 +5490,18 @@ function exportExcel(activeTab){
 
 function setRecTab(tab){
   window._recActiveTab=tab;
+  renderRecordsPage();
+}
+
+/* ── 상부/하부 필터 (2026-05-17 추가) ──
+   필터 버튼 활성화 상태도 토글 */
+function setRecFilter(filter){
+  window._recModeFilter = filter;
+  /* 버튼 active 클래스 토글 */
+  var btns = document.querySelectorAll('.rec-filter-btn');
+  for(var i=0;i<btns.length;i++){
+    btns[i].classList.toggle('active', btns[i].getAttribute('data-filter') === filter);
+  }
   renderRecordsPage();
 }
 
