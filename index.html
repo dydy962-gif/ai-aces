@@ -1841,14 +1841,62 @@ function applyWhiteBalance(photoObj, idx){
     /* 보정 안 하고 원본 그대로 SAM3 호출 */
     photoObj.correctedCanvas = null;
     photoObj.correctedUrl = photoObj.compressedUrl;
+    photoObj.wbInfo = {applied: false, reason: '난좌 색 분석 실패'};
     setTimeout(function(){ callSAM3(photoObj, idx); }, 200);
     return;
   }
   
-  var kR = Math.min(2.0, 255 / rgb.r);
-  var kG = Math.min(2.0, 255 / rgb.g);
-  var kB = Math.min(2.0, 255 / rgb.b);
+  /* ════════════════════════════════════════════════════
+     화이트밸런스 보정 — 2026-05-17 대폭 개선
+     - 상한 2.0 → 1.2 (학술적으로 안전한 ±20% 범위)
+     - 난좌가 너무 어두우면(평균 RGB < 100) 보정 건너뛰기
+       (그림자 너무 강한 사진은 보정해도 의미 없음)
+     - 보정 정보를 wbInfo에 저장 → 결과 화면 표시용
+     ════════════════════════════════════════════════════ */
   
+  var WB_MAX = 1.2; /* 학술 표준 상한 — ±20% */
+  var DARK_THRESHOLD = 100; /* 평균 RGB가 이보다 작으면 보정 안 함 */
+  
+  /* 안전장치 1: 난좌가 너무 어두우면 보정 건너뛰기 */
+  var avgRgb = (rgb.r + rgb.g + rgb.b) / 3;
+  if(avgRgb < DARK_THRESHOLD){
+    console.log('[WB] 난좌가 너무 어두움 (평균 ' + avgRgb.toFixed(0) + ') — 보정 건너뜀');
+    photoObj.correctedCanvas = null;
+    photoObj.correctedUrl = photoObj.compressedUrl;
+    photoObj.wbInfo = {
+      applied: false,
+      reason: '난좌가 너무 어두움 (평균 ' + Math.round(avgRgb) + ')',
+      source: rgb
+    };
+    setTimeout(function(){
+      toast('⚠ 그림자 강함 — 화이트밸런스 건너뜀 (원본으로 측정)');
+      callSAM3(photoObj, idx);
+    }, 200);
+    return;
+  }
+  
+  /* 보정 계수 계산 — 상한 1.2배로 제한 */
+  var kR = Math.min(WB_MAX, 255 / rgb.r);
+  var kG = Math.min(WB_MAX, 255 / rgb.g);
+  var kB = Math.min(WB_MAX, 255 / rgb.b);
+  
+  /* 안전장치 2: 보정이 미미하면(모든 계수 ≤ 1.02) 건너뛰기 — 불필요한 처리 방지 */
+  var maxK = Math.max(kR, kG, kB);
+  if(maxK <= 1.02){
+    console.log('[WB] 난좌가 거의 흰색 — 보정 불필요 (max k=' + maxK.toFixed(3) + ')');
+    photoObj.correctedCanvas = null;
+    photoObj.correctedUrl = photoObj.compressedUrl;
+    photoObj.wbInfo = {
+      applied: false,
+      reason: '난좌가 이미 흰색에 가까움 (보정 불필요)',
+      kR: kR, kG: kG, kB: kB,
+      source: rgb
+    };
+    setTimeout(function(){ callSAM3(photoObj, idx); }, 200);
+    return;
+  }
+  
+  /* 실제 보정 적용 */
   var srcCanvas = document.createElement('canvas');
   srcCanvas.width = photoObj.img.naturalWidth;
   srcCanvas.height = photoObj.img.naturalHeight;
@@ -1870,6 +1918,17 @@ function applyWhiteBalance(photoObj, idx){
   photoObj.correctedUrl = srcCanvas.toDataURL('image/jpeg', 0.92);
   photoObj.wbCorrection = {kR: kR, kG: kG, kB: kB, source: rgb};
   photoObj.wbCorrected = true;
+  
+  /* 보정 정보 저장 — 결과 화면 표시용 */
+  var maxIntensity = ((maxK - 1) * 100).toFixed(1); /* 몇 % 밝아졌는지 */
+  photoObj.wbInfo = {
+    applied: true,
+    kR: kR, kG: kG, kB: kB,
+    source: rgb,
+    maxIntensityPct: maxIntensity,
+    summary: '×' + maxK.toFixed(2) + ' (' + maxIntensity + '% 밝기 증가)'
+  };
+  console.log('[WB] 보정 적용 — R:' + kR.toFixed(3) + ' G:' + kG.toFixed(3) + ' B:' + kB.toFixed(3) + ' (max ' + maxIntensity + '% 증가)');
   
   /* 보정된 이미지를 표시 이미지로 교체 */
   var newImg = new Image();
@@ -2178,7 +2237,6 @@ function renderBatchResultsPanel(){
   var panel = document.getElementById('batchResultsPanel');
   var list = document.getElementById('batchResultsList');
   var subtitle = document.getElementById('batchResultsSubtitle');
-  var saveBtn = document.getElementById('batchSaveBtn');
   if(!panel || !list) return;
   
   var results = window._batchResults || [];
@@ -2204,11 +2262,29 @@ function renderBatchResultsPanel(){
     subtitle.textContent = parts.join(' · ');
   }
   
-  /* 저장 버튼 라벨 */
+  /* 저장 버튼 라벨 — 3개 버튼 모두 선택 개수 표시 */
+  var saveBtn = document.getElementById('batchSaveBtn');
+  var saveImgBtn = document.getElementById('batchSaveImgBtn');
+  var saveBothBtn = document.getElementById('batchSaveBothBtn');
+  
   if(saveBtn){
-    saveBtn.textContent = selected > 0 ? '💾 선택한 ' + selected + '개 저장' : '💾 선택된 항목 없음';
-    saveBtn.style.opacity = selected > 0 ? '1' : '.5';
-    saveBtn.style.cursor = selected > 0 ? 'pointer' : 'not-allowed';
+    var unsaved = results.filter(function(r){return r.selected && !r.saved && r.status === 'success';}).length;
+    saveBtn.textContent = unsaved > 0 ? '💾 데이터 (' + unsaved + ')' : '💾 데이터 저장';
+    saveBtn.style.opacity = unsaved > 0 ? '1' : '.5';
+    saveBtn.style.cursor = unsaved > 0 ? 'pointer' : 'not-allowed';
+  }
+  if(saveImgBtn){
+    /* 이미지 저장은 saved 여부 무관 — selected이고 success면 됨 */
+    var imgCnt = results.filter(function(r){return r.selected && r.status === 'success';}).length;
+    saveImgBtn.textContent = imgCnt > 0 ? '📥 이미지 (' + imgCnt + ')' : '📥 이미지 저장';
+    saveImgBtn.style.opacity = imgCnt > 0 ? '1' : '.5';
+    saveImgBtn.style.cursor = imgCnt > 0 ? 'pointer' : 'not-allowed';
+  }
+  if(saveBothBtn){
+    var bothCnt = results.filter(function(r){return r.selected && !r.saved && r.status === 'success';}).length;
+    saveBothBtn.textContent = bothCnt > 0 ? '💾📥 둘 다 (' + bothCnt + '개)' : '💾📥 둘 다 한 번에 저장';
+    saveBothBtn.style.opacity = bothCnt > 0 ? '1' : '.5';
+    saveBothBtn.style.cursor = bothCnt > 0 ? 'pointer' : 'not-allowed';
   }
   
   /* 카드 목록 렌더링 */
@@ -2349,6 +2425,134 @@ function batchSaveSelected(){
   
   toast('✅ ' + savedCnt + '개 기록 저장 완료');
   renderBatchResultsPanel();
+}
+
+/* ════════════════════════════════════════════════════
+   일괄 이미지 저장 (2026-05-17 추가)
+   선택된 사진들의 등급 마킹된 캔버스를 PNG로 다운로드
+   주의: 브라우저는 한 번에 여러 파일 다운로드 가능 (사용자 권한 1번만 요청)
+   ════════════════════════════════════════════════════ */
+function batchSaveImages(){
+  if(!window._batchResults) return;
+  var toSave = window._batchResults.filter(function(r){
+    return r.selected && r.status === 'success';
+  });
+  if(toSave.length === 0){
+    toast('⚠ 선택된 항목이 없습니다');
+    return;
+  }
+  
+  toast('📥 ' + toSave.length + '개 이미지 저장 시작...');
+  
+  var saved = 0;
+  var failed = 0;
+  
+  /* 사진별로 캔버스 생성 후 PNG 저장 — 각 사진을 임시로 활성화해서 등급 마킹 그리기 */
+  /* 동시에 너무 많이 다운로드 시도하면 브라우저가 막을 수 있으므로 100ms 간격 */
+  toSave.forEach(function(item, idx){
+    setTimeout(function(){
+      try {
+        if(item.photoIdx < 0 || !photos[item.photoIdx]) return;
+        
+        var prevIdx = aIdx;
+        aIdx = item.photoIdx;
+        
+        /* 캔버스 다시 그리기 (등급 마킹 포함) */
+        redrawBoxResult(photos[item.photoIdx]);
+        
+        /* 캔버스 → PNG → 다운로드 */
+        cvs.toBlob(function(blob){
+          if(!blob){
+            failed++;
+            console.error('[Batch Image] blob 생성 실패:', item.photoName);
+            return;
+          }
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement('a');
+          a.href = url;
+          /* 파일명: 사진명에서 확장자 제거 후 등급 추가 */
+          var baseName = (item.photoName || 'photo').replace(/\.[^.]+$/, '');
+          a.download = 'FujiGrade_' + baseName + '_' + item.result.avgGrade + '_' + item.result.avgPct + 'pct.png';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+          saved++;
+          
+          /* 마지막 저장 끝나면 토스트 */
+          if(saved + failed >= toSave.length){
+            toast('📥 이미지 ' + saved + '개 저장 완료' + (failed > 0 ? ' (' + failed + '개 실패)' : ''));
+          }
+        }, 'image/png');
+        
+        aIdx = prevIdx;
+      } catch(e){
+        failed++;
+        console.error('[Batch Image] 저장 오류:', e);
+      }
+    }, idx * 150); /* 150ms 간격으로 순차 다운로드 */
+  });
+}
+
+/* 데이터 + 이미지 둘 다 저장 — 두 함수를 순서대로 호출 */
+function batchSaveBoth(){
+  if(!window._batchResults) return;
+  var toSave = window._batchResults.filter(function(r){
+    return r.selected && r.status === 'success' && !r.saved;
+  });
+  if(toSave.length === 0){
+    toast('⚠ 선택된 항목이 없습니다');
+    return;
+  }
+  
+  /* 1단계: 데이터 저장 (동기) */
+  batchSaveSelected();
+  
+  /* 2단계: 이미지 저장 (저장 후 saved=true 됐어도 이미지는 따로 처리) */
+  /* batchSaveImages는 selected만 보고 saved 무시 — 둘 다 저장 가능 */
+  setTimeout(function(){
+    batchSaveImagesAfterDataSave(toSave);
+  }, 300);
+}
+
+/* 데이터 저장 후 이미지 저장용 — 원래 선택 리스트 그대로 받음 */
+function batchSaveImagesAfterDataSave(originalList){
+  var saved = 0, failed = 0;
+  
+  originalList.forEach(function(item, idx){
+    setTimeout(function(){
+      try {
+        if(item.photoIdx < 0 || !photos[item.photoIdx]) return;
+        
+        var prevIdx = aIdx;
+        aIdx = item.photoIdx;
+        redrawBoxResult(photos[item.photoIdx]);
+        
+        cvs.toBlob(function(blob){
+          if(!blob){ failed++; return; }
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement('a');
+          a.href = url;
+          var baseName = (item.photoName || 'photo').replace(/\.[^.]+$/, '');
+          a.download = 'FujiGrade_' + baseName + '_' + item.result.avgGrade + '_' + item.result.avgPct + 'pct.png';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+          saved++;
+          
+          if(saved + failed >= originalList.length){
+            toast('📥 이미지 ' + saved + '개도 저장 완료' + (failed > 0 ? ' (' + failed + '개 실패)' : ''));
+          }
+        }, 'image/png');
+        
+        aIdx = prevIdx;
+      } catch(e){
+        failed++;
+        console.error('[Batch Both] 이미지 오류:', e);
+      }
+    }, idx * 150);
+  });
 }
 
 /* SAM3 출력을 표준 사과 배열로 변환 */
@@ -3017,6 +3221,44 @@ function showBoxResult(photoObj){
         '<div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">🌾 농촌진흥청 색체계</div>' +
         '<div style="font-size:14px;font-weight:700;color:var(--cream);margin-bottom:4px">'+r.nradStage.stage+'</div>' +
         '<div style="font-size:11px;color:var(--muted)">💡 '+r.nradStage.advice+'</div>' +
+        '</div>';
+    }
+    
+    /* ── 화이트밸런스 보정 정보 (2026-05-17 추가) ──
+       연구원이 데이터 검토 시 보정 정도 확인 가능 */
+    if(photoObj.wbInfo){
+      var wb = photoObj.wbInfo;
+      var wbBg, wbBorder, wbIcon, wbLabel, wbDetail;
+      if(wb.applied){
+        /* 보정 적용됨 */
+        var intensity = parseFloat(wb.maxIntensityPct);
+        if(intensity > 15){
+          /* 보정 강함 — 노란색 */
+          wbBg = 'rgba(232,160,32,.08)';
+          wbBorder = 'rgba(232,160,32,.3)';
+          wbIcon = '⚠️';
+          wbLabel = '강한 보정 적용';
+        } else {
+          /* 가벼운 보정 — 시안색 */
+          wbBg = 'rgba(127,211,211,.06)';
+          wbBorder = 'rgba(127,211,211,.25)';
+          wbIcon = '✨';
+          wbLabel = '가벼운 보정';
+        }
+        wbDetail = wb.summary + ' · 난좌 RGB (' + wb.source.r + ',' + wb.source.g + ',' + wb.source.b + ')';
+      } else {
+        /* 보정 안 함 */
+        wbBg = 'rgba(255,255,255,.04)';
+        wbBorder = 'rgba(255,255,255,.1)';
+        wbIcon = '🚫';
+        wbLabel = '보정 안 함';
+        wbDetail = wb.reason || '원본 그대로 측정됨';
+      }
+      html += '<div style="background:'+wbBg+';border:1px solid '+wbBorder+';border-radius:6px;padding:8px 10px;margin-bottom:10px">' +
+        '<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--cream);font-weight:600;margin-bottom:2px">' +
+          '<span>'+wbIcon+'</span><span>화이트밸런스: '+wbLabel+'</span>' +
+        '</div>' +
+        '<div style="font-size:10px;color:var(--muted);font-family:var(--mm)">'+wbDetail+'</div>' +
         '</div>';
     }
     
@@ -6366,7 +6608,11 @@ initVarietyUI();
   </div>
   <div id="batchResultsList" style="max-height:calc(70vh - 130px);overflow-y:auto;padding:10px"></div>
   <div style="padding:10px 14px;border-top:1px solid rgba(127,211,211,.2);background:rgba(0,0,0,.2)">
-    <button id="batchSaveBtn" onclick="batchSaveSelected()" style="width:100%;padding:12px;background:linear-gradient(90deg,#7fd3d3,#8cc44a);border:none;color:#0a1f2e;font-weight:700;font-size:13px;border-radius:6px;cursor:pointer">💾 선택한 항목 저장</button>
+    <div style="display:flex;gap:6px;margin-bottom:6px">
+      <button id="batchSaveBtn" onclick="batchSaveSelected()" style="flex:1;padding:10px;background:linear-gradient(90deg,#7fd3d3,#8cc44a);border:none;color:#0a1f2e;font-weight:700;font-size:12px;border-radius:6px;cursor:pointer">💾 데이터 저장</button>
+      <button id="batchSaveImgBtn" onclick="batchSaveImages()" style="flex:1;padding:10px;background:rgba(127,211,211,.15);border:1px solid #7fd3d3;color:#7fd3d3;font-weight:700;font-size:12px;border-radius:6px;cursor:pointer">📥 이미지 저장</button>
+    </div>
+    <button id="batchSaveBothBtn" onclick="batchSaveBoth()" style="width:100%;padding:10px;background:rgba(140,196,74,.15);border:1px solid #8cc44a;color:#8cc44a;font-weight:700;font-size:12px;border-radius:6px;cursor:pointer">💾📥 둘 다 한 번에 저장</button>
     <div style="text-align:center;font-size:10px;color:rgba(255,255,255,.4);margin-top:8px">개별 항목 클릭 시 상세 결과 보기</div>
   </div>
 </div>
