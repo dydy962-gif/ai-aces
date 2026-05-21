@@ -3267,7 +3267,7 @@ function setBoxStatus(status, count){
     case 'detected':
       html = '<div style="padding:10px;background:rgba(127,198,245,.1);border-radius:6px;border-left:3px solid var(--accent)">' +
         '<div style="font-weight:600;color:var(--accent);margin-bottom:4px">✅ 검출 완료 — 사과 ' + count + '개</div>' +
-        '<div style="font-size:11px;color:var(--cream);line-height:1.6">📌 픽셀 단위로 정확히 검출됨. 캔버스의 <b style="color:#e74c3c">빨간 영역</b>이 검출된 사과입니다. 검토 후 색 보정 + 측정 시작.</div>' +
+        '<div style="font-size:11px;color:var(--cream);line-height:1.6">📌 픽셀 단위로 정확히 검출됨. 캔버스의 <b style="color:#4078ff">남색 영역</b>이 검출된 사과입니다. 검토 후 색 보정 + 측정 시작.</div>' +
         '</div>';
       break;
     case 'keyMissing':
@@ -4000,8 +4000,13 @@ function saveBoxResult(){
     if(regionData[photoRegion]) rname = regionData[photoRegion].name;
   }
   
+  /* ★ 2026-05-21 v11: id 생성 충돌 방지 강화
+     이전: Date.now() + random*1000 → 빠른 연속 호출 시 동일 id 발생 가능
+     변경: Date.now() * 1000 + 전역 카운터 → 항상 unique 보장 */
+  if(typeof window._recordIdCounter === 'undefined') window._recordIdCounter = 0;
+  window._recordIdCounter++;
   var record = {
-    id: Date.now() + Math.floor(Math.random()*1000), /* 일괄 저장 시 id 중복 방지 */
+    id: Date.now() * 10000 + (window._recordIdCounter % 10000), /* 절대 충돌 안 함 */
     date: new Date().toISOString().slice(0,10),
     harvestDate: document.getElementById('harvestDate').value||'',
     pct: r.avgPct,
@@ -4021,9 +4026,16 @@ function saveBoxResult(){
     variety: r.variety,
     varietyName: r.varietyName,
     nradStage: r.nradStage ? r.nradStage.stage : null,
+    /* ★ 2026-05-21 v11: localStorage 용량 절약 - 사과별 핵심 필드만 저장 */
     boxData: {
       gradeCounts: r.gradeCounts,
-      individual: r.apples
+      individual: (r.apples || []).map(function(a){
+        return {
+          pct: a.pct,
+          grade: a.grade,
+          gradeColor: a.gradeColor
+        };
+      })
     },
     weather: null,
     /* ★ 2026-05-17 추가: 상부/하부 구분 (평균내기용) */
@@ -4056,6 +4068,15 @@ function saveBoxResult(){
   
   records.push(record);
   saveAllRecords(records);
+  
+  /* ★ 2026-05-21 v11 진단 로그: push 직후 + 저장 직후 길이 확인 */
+  console.log('[saveBoxResult] push 직후 records.length=' + records.length + ', record.id=' + record.id + ', region=' + record.region + ', addr=' + record.address);
+  /* localStorage 직후 검증 — 진짜 저장됐는지 다시 로드해서 확인 */
+  var verifyRecords = loadAllRecords();
+  console.log('[saveBoxResult] localStorage 검증 — 저장 후 다시 로드: ' + verifyRecords.length + '건');
+  if(verifyRecords.length !== records.length){
+    console.error('[saveBoxResult] ⚠ 저장 누락! push후 ' + records.length + ' vs 검증후 ' + verifyRecords.length);
+  }
   
   /* ★ 2026-05-21: 도별 통계는 records 기준으로 재계산 — 중복 카운트 방지 */
   rebuildRegionDataFromRecords();
@@ -4364,9 +4385,10 @@ function redraw(){
           ctx.lineTo(a.polygon[pi][0] * w, a.polygon[pi][1] * h);
         }
         ctx.closePath();
-        ctx.fillStyle='rgba(231, 76, 60, 0.35)';
+        /* ★ 2026-05-21 v11: 빨간색 → 진한 남색 (빨간 사과 위에서 더 잘 보임) */
+        ctx.fillStyle='rgba(33, 64, 175, 0.35)';
         ctx.fill();
-        ctx.strokeStyle='rgba(231, 76, 60, 0.95)';
+        ctx.strokeStyle='rgba(64, 120, 255, 0.95)';
         ctx.lineWidth=2;
         ctx.stroke();
       } else {
@@ -4375,9 +4397,9 @@ function redraw(){
         var r_ = (a.r || 0.05) * Math.min(w, h);
         ctx.beginPath();
         ctx.arc(cx_, cy_, r_, 0, 2*Math.PI);
-        ctx.fillStyle='rgba(231, 76, 60, 0.25)';
+        ctx.fillStyle='rgba(33, 64, 175, 0.25)';
         ctx.fill();
-        ctx.strokeStyle='rgba(231, 76, 60, 0.9)';
+        ctx.strokeStyle='rgba(64, 120, 255, 0.9)';
         ctx.lineWidth=2;
         ctx.stroke();
       }
@@ -6212,7 +6234,23 @@ function loadAllRecords(){
   try{var raw=localStorage.getItem('fujigrade_records');return raw?JSON.parse(raw):[];}catch(e){return[];}
 }
 function saveAllRecords(records){
-  try{localStorage.setItem('fujigrade_records',JSON.stringify(records));}catch(e){}
+  try{
+    var json = JSON.stringify(records);
+    localStorage.setItem('fujigrade_records', json);
+    /* ★ 2026-05-21 v11: 저장 성공 검증 */
+    var saved = localStorage.getItem('fujigrade_records');
+    if(!saved || saved.length !== json.length){
+      console.error('[saveAllRecords] ⚠ 저장 검증 실패 — write ' + json.length + ' vs read ' + (saved?saved.length:0));
+    }
+  }catch(e){
+    console.error('[saveAllRecords] ⚠ localStorage 저장 실패:', e.message);
+    /* QuotaExceededError 가능성 — 사용자에게 알림 */
+    if(e.name === 'QuotaExceededError' || e.message.indexOf('quota') >= 0){
+      toast('⚠ 저장 공간 부족 — 기록 탭에서 옛 기록을 삭제하세요');
+    } else {
+      toast('⚠ 저장 실패: ' + e.message);
+    }
+  }
 }
 
 /* ★ 2026-05-21: 데이터 무결성 재계산 — 도별 카운트를 records에서 다시 계산
