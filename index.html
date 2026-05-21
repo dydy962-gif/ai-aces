@@ -964,18 +964,7 @@ function hideKreiSplash(){
       <!-- 박스 모드 상태 표시 (5-3 작업) -->
       <div id="boxStatus" style="margin:8px 0"></div>
 
-      <!-- 박스 모드 검토 바 (5-4 작업, 픽셀 검출용으로 단순화) -->
-      <div id="boxReviewBar" style="display:none;flex-direction:column;gap:8px;margin:8px 0;padding:10px;background:rgba(0,86,102,.1);border:1px solid rgba(0,132,134,.3);border-radius:var(--r)">
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-          <span style="font-size:11px;font-weight:600;color:#a0d7fa;margin-right:4px">📝 검토:</span>
-          <button class="tb" id="boxReviewBtn_add" onclick="setBoxReviewMode('add')" title="빈 공간 클릭으로 놓친 사과 추가">⊕ 사과 추가</button>
-          <button class="tb" id="boxReviewBtn_delete" onclick="setBoxReviewMode('delete')" title="잘못 검출된 사과를 개별 삭제">🗑 개별 삭제</button>
-          <button class="tb" id="boxReviewBtn_move" onclick="setBoxReviewMode('move')" title="드래그로 위치/크기 조정">↔ 위치/크기 조정</button>
-          <button class="tb" onclick="rerunBoxDetection()" style="margin-left:auto;font-size:11px">🔄 다시 검출</button>
-        </div>
-        <div id="boxReviewTip" style="font-size:11px;color:var(--muted);line-height:1.5">💡 사과 번호를 클릭하면 잘못 검출된 영역을 삭제할 수 있습니다.</div>
-        <button onclick="startBoxColorCorrection()" style="padding:10px;background:var(--action);color:#0a0a0a;border:none;border-radius:var(--r);font-weight:700;cursor:pointer;font-size:13px;font-family:var(--fm)">🔬 측정 시작 (LAB a* 분석) →</button>
-      </div>
+      <!-- ★ 2026-05-21: 박스 모드 검토 바 — 캔버스 아래로 이동됨 (사용자 요청) -->
 
       <!-- 캔버스 -->
       <div id="cvs-wrap">
@@ -988,6 +977,27 @@ function hideKreiSplash(){
           <button class="tb run" id="runBtn" onclick="runAnalysis()" disabled>▶ 판정</button>
         </div>
         <div class="apple-list" id="appleList"></div>
+      </div>
+
+      <!-- ★ 2026-05-21 사용자 요청: 검토 바를 캔버스 아래로 -->
+      <div id="boxReviewBar" style="display:none;flex-direction:column;gap:8px;margin:8px 0;padding:10px;background:rgba(0,86,102,.1);border:1px solid rgba(0,132,134,.3);border-radius:var(--r)">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span style="font-size:11px;font-weight:600;color:#a0d7fa;margin-right:4px">📝 검토:</span>
+          <button class="tb" id="boxReviewBtn_delete" onclick="setBoxReviewMode('delete')" title="잘못 검출된 사과를 개별 삭제">🗑 개별 삭제</button>
+          <button class="tb" id="boxReviewBtn_move" onclick="setBoxReviewMode('move')" title="사과 클릭하면 위치/크기 조절바가 나타남">↔ 위치/크기 조정</button>
+          <button class="tb" onclick="rerunBoxDetection()" style="margin-left:auto;font-size:11px">🔄 다시 검출</button>
+        </div>
+        <!-- ★ 2026-05-21: 사과 선택 시 크기 조절바 (move 모드 + 사과 선택 시) -->
+        <div id="appleSizeControl" style="display:none;background:rgba(0,0,0,.3);border-radius:var(--r);padding:10px;border:1px solid rgba(127,198,245,.3)">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;font-size:11px;color:#a0d7fa">
+            <span><b>선택된 사과 #<span id="selectedAppleNum">-</span></b></span>
+            <span id="selectedAppleSize" style="font-family:var(--mm);color:rgba(255,255,255,.7)">반지름: -</span>
+          </div>
+          <input type="range" id="appleSizeSlider" min="20" max="200" value="50" step="2" oninput="updateSelectedAppleSize(this.value)" style="width:100%;accent-color:#7fc6f5;cursor:pointer">
+          <div style="font-size:10px;color:rgba(255,255,255,.5);margin-top:4px;text-align:center">💡 사과 위를 드래그하면 위치를 옮길 수 있습니다</div>
+        </div>
+        <div id="boxReviewTip" style="font-size:11px;color:var(--muted);line-height:1.5">💡 사과 번호를 클릭하면 잘못 검출된 영역을 삭제할 수 있습니다.</div>
+        <button onclick="startBoxColorCorrection()" style="padding:10px;background:var(--action);color:#0a0a0a;border:none;border-radius:var(--r);font-weight:700;cursor:pointer;font-size:13px;font-family:var(--fm)">🔬 측정 시작 (LAB a* 분석) →</button>
       </div>
 
       <!-- 위치 / 날씨 -->
@@ -2590,6 +2600,8 @@ function renderBatchResultsPanel(){
   
   /* 진행 중 사진이 있으면 펄스 효과 (시각적 강조) */
   panel.classList.toggle('processing', processing > 0);
+  /* ★ 2026-05-21 v10: pending 있을 때 toolbar 높이 + body top 자동 조정 */
+  panel.classList.toggle('has-pending', pending > 0);
   
   if(subtitle){
     var parts = [];
@@ -2863,6 +2875,7 @@ function batchSaveSelected(){
   console.log('═══════════════════════════════════════════');
   
   var savedCnt = 0;
+  var alreadySavedCnt = 0;
   for(var i = 0; i < toSave.length; i++){
     var item = toSave[i];
     if(item.photoIdx < 0 || !photos[item.photoIdx]) continue;
@@ -2871,9 +2884,18 @@ function batchSaveSelected(){
     var prevIdx = aIdx;
     aIdx = item.photoIdx;
     try {
-      saveBoxResult();
-      item.saved = true;
-      savedCnt++;
+      /* ★ 2026-05-21 v10: saveBoxResult가 실제 저장 여부 return함 */
+      var actuallyDsaved = saveBoxResult();
+      if(actuallyDsaved){
+        item.saved = true;
+        savedCnt++;
+      } else {
+        /* 이미 저장된 사진 — 패널에서 saved 표시는 photos[idx].saved 따라감 */
+        if(photos[item.photoIdx].saved){
+          item.saved = true;
+          alreadySavedCnt++;
+        }
+      }
     } catch(e){
       console.error('[Batch Save] 저장 오류:', e);
     } finally {
@@ -2881,7 +2903,17 @@ function batchSaveSelected(){
     }
   }
   
-  toast('✅ ' + savedCnt + '개 기록 저장 완료');
+  console.log('═══ [Batch Save] 완료 — 새로 저장 ' + savedCnt + '건, 이미 저장된 것 ' + alreadySavedCnt + '건 ═══');
+  
+  if(savedCnt > 0 && alreadySavedCnt > 0){
+    toast('✅ ' + savedCnt + '건 저장 / ' + alreadySavedCnt + '건은 이미 저장됨');
+  } else if(savedCnt > 0){
+    toast('✅ ' + savedCnt + '건 저장 완료');
+  } else if(alreadySavedCnt > 0){
+    toast('ℹ 선택한 ' + alreadySavedCnt + '건은 모두 이미 저장됨');
+  } else {
+    toast('⚠ 저장된 건이 없습니다');
+  }
   renderBatchResultsPanel();
 }
 
@@ -3404,9 +3436,46 @@ function handleBoxCanvasMouseDown(e){
       y: ny - p.detectedApples[hitIdx].y
     };
     cvs.style.cursor = 'grabbing';
+    /* ★ 2026-05-21: 선택된 사과를 슬라이더에 연결 */
+    window._selectedAppleIdx = hitIdx;
+    showAppleSizeControl(p, hitIdx);
     return true;
   }
   return false;
+}
+
+/* ★ 2026-05-21: 선택된 사과의 크기 조절바 표시 */
+function showAppleSizeControl(p, appleIdx){
+  if(!p || !p.detectedApples || appleIdx < 0) return;
+  var apple = p.detectedApples[appleIdx];
+  if(!apple) return;
+  var ctrl = document.getElementById('appleSizeControl');
+  var num = document.getElementById('selectedAppleNum');
+  var sizeText = document.getElementById('selectedAppleSize');
+  var slider = document.getElementById('appleSizeSlider');
+  if(!ctrl) return;
+  ctrl.style.display = 'block';
+  if(num) num.textContent = (appleIdx + 1);
+  /* 반지름은 정규화 좌표(0~1) — 픽셀로 환산해서 표시 */
+  var radiusPx = Math.round(apple.r * cvs.width);
+  if(sizeText) sizeText.textContent = '반지름: ' + radiusPx + 'px';
+  if(slider) slider.value = Math.min(200, Math.max(20, radiusPx));
+}
+
+/* ★ 2026-05-21: 슬라이더로 선택된 사과 크기 변경 */
+function updateSelectedAppleSize(value){
+  if(aIdx<0 || !photos[aIdx]) return;
+  var p = photos[aIdx];
+  var idx = window._selectedAppleIdx;
+  if(typeof idx !== 'number' || idx < 0 || !p.detectedApples || !p.detectedApples[idx]) return;
+  /* px → 정규화 좌표 */
+  var newR = value / cvs.width;
+  p.detectedApples[idx].r = newR;
+  var sizeText = document.getElementById('selectedAppleSize');
+  if(sizeText) sizeText.textContent = '반지름: ' + value + 'px';
+  drawDetectedApples(p);
+  /* 측정 결과 무효화 — 다시 측정 필요 */
+  invalidateMeasurementAfterEdit(p);
 }
 
 /* 캔버스 마우스이동 (드래그) */
@@ -3885,7 +3954,7 @@ function redrawBoxResult(photoObj){
 function saveBoxResult(){
   if(aIdx<0 || !photos[aIdx] || !photos[aIdx].boxResult){
     toast('저장할 결과가 없습니다');
-    return;
+    return false;
   }
   var p = photos[aIdx];
   var r = p.boxResult;
@@ -3898,8 +3967,7 @@ function saveBoxResult(){
      도별 카운트가 한 사진당 여러 번 증가하던 버그 (지도 48건 vs 실제 9건). */
   if(p.saved){
     console.log('[Save] 이미 저장된 사진 — 중복 저장 방지 (사진 idx=' + aIdx + ')');
-    /* 사용자에게는 알림만 — 결과 패널에서 saved 처리는 호출자가 알아서 */
-    return;
+    return false; /* ★ 2026-05-21 v10: 실제 저장 안 됐음을 알림 */
   }
   
   var records = loadAllRecords();
@@ -3993,9 +4061,11 @@ function saveBoxResult(){
   rebuildRegionDataFromRecords();
   
   p.saved = true;
+  console.log('[saveBoxResult] ✓ 저장 완료 — records 총 ' + records.length + '건, photoIdx=' + aIdx);
   toast('💾 박스 측정 저장됨 ('+r.count+'개 사과, 평균 '+r.avgPct+'%, '+(rname||'위치미상')+')');
   renderStatsMemo();
   initKoreaMap();
+  return true; /* ★ 2026-05-21 v10: 저장 성공 */
 }
 
 /* 박스 결과 이미지 저장 */
@@ -7535,11 +7605,12 @@ initVarietyUI();
      ════════════════════════════════════════════════════ -->
 <!-- ★ 2026-05-19 v3: 드래그 가능한 떠다니는 결과 패널 -->
 <style>
+/* ★ 2026-05-21 v10: position absolute 방식 - flexbox 충돌 회피, 확실히 작동 */
 #batchResultsPanel{
   position:fixed;
   top:80px; right:20px;
-  width:440px; /* 380 → 440으로 키움 — toolbar 3개 버튼 안 잘리게 */
-  height:600px; /* 560 → 600 — 더 많이 보이게 */
+  width:440px;
+  height:600px;
   background:#0a0a0a;
   border:1px solid rgba(160,215,250,.4);
   border-radius:12px;
@@ -7550,9 +7621,61 @@ initVarietyUI();
   resize:both;
   min-width:340px; min-height:300px;
   max-width:calc(100vw - 40px); max-height:calc(100vh - 100px);
-  /* ★ flexbox 레이아웃 — 본문이 남는 공간 차지 + 자동 스크롤 */
-  display:flex;
-  flex-direction:column;
+  /* flexbox 제거 - 자식 요소들을 직접 absolute로 배치 */
+}
+#batchResultsPanel .batch-header{
+  position:absolute;
+  top:0; left:0; right:0;
+  height:48px;
+  z-index:2;
+}
+#batchResultsPanel .batch-toolbar{
+  position:absolute;
+  top:48px; left:0; right:0;
+  height:96px; /* toolbar-mode(28) + row1(28) + row2(40) ≈ 96 */
+  z-index:2;
+  box-sizing:border-box;
+}
+#batchResultsPanel.has-pending .batch-toolbar{
+  height:128px; /* pending 있을 때 mode-row 보이는 만큼 추가 */
+}
+#batchResultsPanel .batch-footer{
+  position:absolute;
+  bottom:0; left:0; right:0;
+  height:30px;
+  z-index:2;
+  box-sizing:border-box;
+}
+#batchResultsPanel .batch-body{
+  position:absolute;
+  top:144px;   /* 헤더(48) + 툴바(96) */
+  bottom:30px; /* 푸터(30) */
+  left:0; right:0;
+  overflow-y:auto !important;
+  overflow-x:hidden;
+  padding:10px;
+  box-sizing:border-box;
+  /* 디버깅: 사용자가 적용 여부 즉시 확인 가능 */
+  border-top:1px solid rgba(160,215,250,.15);
+  border-bottom:1px solid rgba(160,215,250,.15);
+}
+#batchResultsPanel.has-pending .batch-body{
+  top:176px; /* mode-row 추가됐을 때 */
+}
+/* 스크롤바 명확히 보이게 */
+#batchResultsPanel .batch-body::-webkit-scrollbar{
+  width:10px !important;
+}
+#batchResultsPanel .batch-body::-webkit-scrollbar-track{
+  background:rgba(255,255,255,.03);
+}
+#batchResultsPanel .batch-body::-webkit-scrollbar-thumb{
+  background:rgba(160,215,250,.35);
+  border-radius:5px;
+  border:1px solid rgba(160,215,250,.2);
+}
+#batchResultsPanel .batch-body::-webkit-scrollbar-thumb:hover{
+  background:rgba(160,215,250,.6);
 }
 #batchResultsPanel.minimized{
   height:auto !important;
@@ -7569,8 +7692,12 @@ initVarietyUI();
   border-color:rgba(160,215,250,.6);
 }
 #batchResultsPanel.minimized .batch-body,
-#batchResultsPanel.minimized .batch-footer{display:none}
+#batchResultsPanel.minimized .batch-toolbar,
+#batchResultsPanel.minimized .batch-footer{display:none !important}
 #batchResultsPanel.minimized .batch-header{
+  position:relative !important; /* minimized 시 absolute 해제 */
+  top:auto !important;
+  height:auto !important;
   padding:8px 14px;
   border-bottom:none;
   background:transparent;
@@ -7622,25 +7749,11 @@ initVarietyUI();
 }
 .batch-ctrl-btn:hover{background:rgba(255,255,255,.12);color:white}
 
-/* ★ 2026-05-19 v6: flexbox 자식 정의 */
+/* ★ 2026-05-19 v6: flex 자식 정의 → v10에서 absolute 방식으로 변경됨 (이 블록은 비활성) */
 #batchResultsPanel.minimized{
-  display:block; /* 미니바일 땐 flexbox 해제 */
+  display:block; /* 미니바일 땐 정상 */
 }
-#batchResultsPanel .batch-header{flex-shrink:0}
-#batchResultsPanel .batch-toolbar{flex-shrink:0}
-#batchResultsPanel .batch-footer{flex-shrink:0}
-#batchResultsPanel .batch-body{
-  flex:1 1 0; /* 남는 공간 다 차지 — 0 base로 확실히 */
-  overflow-y:auto !important;
-  overflow-x:hidden;
-  padding:10px;
-  min-height:0; /* flex 자식이 줄어들 수 있도록 */
-}
-/* 스크롤바 — 검정 톤에 맞게 */
-#batchResultsPanel .batch-body::-webkit-scrollbar{width:6px}
-#batchResultsPanel .batch-body::-webkit-scrollbar-track{background:transparent}
-#batchResultsPanel .batch-body::-webkit-scrollbar-thumb{background:rgba(160,215,250,.25);border-radius:3px}
-#batchResultsPanel .batch-body::-webkit-scrollbar-thumb:hover{background:rgba(160,215,250,.45)}
+/* 이전 flex 자식 규칙들은 위 absolute 방식이 우선하므로 무력화됨 */
 
 /* ★ 상단 툴바 — 저장/체크 버튼 영역 */
 .batch-toolbar{
