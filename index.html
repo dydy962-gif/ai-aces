@@ -7301,13 +7301,17 @@ function clickRegion(id){
   var markerGroup = document.getElementById('markerGroup');
   if(markerGroup) markerGroup.style.display = 'none';
   
-  /* 도 path의 외곽선만 줌인 시 제거 (시·군 외곽선과 분신 효과 방지)
-     채움은 유지 → 도 영역이 시·군 path 사이 빈틈(대구·부산 광역시 위치 등) 채움 */
+  /* ★ 2026-05-22 v14.5: 줌인 시 도 path의 외곽선 + 채움 둘 다 제거
+     이유: 도 전체가 한 색으로 깔리면 시·군별 차이가 안 보임
+     → 시·군 path만 본인 평균 색으로 표시되어 어느 시가 잘 익었는지 한눈에 보임 */
   var thisPoly = document.getElementById('poly_'+id);
   if(thisPoly){
     thisPoly.dataset.origStroke = thisPoly.getAttribute('stroke') || '';
     thisPoly.dataset.origStrokeWidth = thisPoly.getAttribute('stroke-width') || '';
+    thisPoly.dataset.origFill = thisPoly.getAttribute('fill') || '';
+    thisPoly.dataset.origFillOpacity = thisPoly.getAttribute('fill-opacity') || '';
     thisPoly.setAttribute('stroke', 'none');
+    thisPoly.setAttribute('fill', 'none'); /* 도 채움 제거 */
   }
   
   /* ★ 2026-05-22 v13.7: 시·군 경계 다시 활성화
@@ -7340,8 +7344,17 @@ function resetMapZoom(){
     if(thisPoly && thisPoly.dataset.origStroke !== undefined){
       thisPoly.setAttribute('stroke', thisPoly.dataset.origStroke);
       thisPoly.setAttribute('stroke-width', thisPoly.dataset.origStrokeWidth);
+      /* ★ v14.5: 도 채움도 복원 */
+      if(thisPoly.dataset.origFill !== undefined){
+        thisPoly.setAttribute('fill', thisPoly.dataset.origFill);
+        thisPoly.setAttribute('fill-opacity', thisPoly.dataset.origFillOpacity);
+      }
     }
   }
+  
+  /* ★ v14.5: 시·군 상세 패널 숨김 */
+  var sigDetail = document.getElementById('sigunguDetailPanel');
+  if(sigDetail) sigDetail.style.display = 'none';
   
   zoomedRegion = null;
   
@@ -7392,28 +7405,62 @@ function renderSigunguBorders(regionId){
   
   var sigungus = SIGUNGU_PATHS[regionId];
   var excludeList = (typeof SIGUNGU_EXCLUDE !== 'undefined' && SIGUNGU_EXCLUDE[regionId]) ? SIGUNGU_EXCLUDE[regionId] : [];
-  var html = '';
   
-  /* 1단계: 모든 시·군 path 그리기 (경계선만) — 제외 시·군은 안 그림 */
-  for(var i=0;i<sigungus.length;i++){
-    var s = sigungus[i];
-    /* ★ v14.3: 제외 시·군 (옹진군, 울릉군 등)은 경계선 안 그림 */
-    if(excludeList.indexOf(s.n) !== -1) continue;
-    html += '<path d="' + s.d + '"';
-    html += ' fill="none"';
-    html += ' stroke="rgba(180,215,250,0.75)"';
-    html += ' stroke-width="0.7"';
-    html += ' style="pointer-events:none"';
-    html += '><title>' + s.n + '</title></path>';
+  /* ★ 2026-05-22 v14.5: 시·군별 records 집계 (평균 착색률 + 표본 수)
+     → 시·군 path를 본인 평균 착색률 색으로 칠하기 */
+  var records = (typeof loadAllRecords === 'function') ? loadAllRecords() : [];
+  var cityStats = {}; /* { '청송군': {sum, count, avg}, ... } */
+  for(var ri=0; ri<records.length; ri++){
+    var rec = records[ri];
+    var city = (rec.sigungu || '').trim();
+    if(!city) continue;
+    if(!cityStats[city]) cityStats[city] = {sum:0, count:0};
+    cityStats[city].sum += (rec.avg || 0);
+    cityStats[city].count += 1;
+  }
+  for(var ck in cityStats){
+    if(cityStats.hasOwnProperty(ck)){
+      cityStats[ck].avg = cityStats[ck].sum / cityStats[ck].count;
+    }
   }
   
-  /* 2단계: 각 시·군 이름 라벨 (path 중심에 표시) — 제외 시·군은 안 표시 */
+  var html = '';
+  
+  /* 1단계: 모든 시·군 path 그리기 (색 + 경계선 + 클릭 가능) */
+  for(var i=0;i<sigungus.length;i++){
+    var s = sigungus[i];
+    /* ★ v14.3: 제외 시·군 (옹진군, 울릉군 등)은 안 그림 */
+    if(excludeList.indexOf(s.n) !== -1) continue;
+    
+    /* 색칠 결정: 데이터 있으면 평균 색, 없으면 옅은 회색
+       n<5는 흐리게 (신뢰도 표시) */
+    var st = cityStats[s.n];
+    var fillCol, fillOp;
+    if(st && st.count > 0){
+      var card = (typeof getCard === 'function') ? getCard(st.avg) : {color:'#9d9d77'};
+      fillCol = card.color;
+      fillOp = st.count >= 5 ? '0.55' : '0.25'; /* n≥5 진하게, n<5 흐리게 */
+    } else {
+      fillCol = 'rgba(127,198,245,0.08)'; /* 데이터 없는 시·군 - 옅은 회색 */
+      fillOp = '1';
+    }
+    
+    html += '<path id="sig_'+s.n+'" d="' + s.d + '"';
+    html += ' fill="' + fillCol + '" fill-opacity="' + fillOp + '"';
+    html += ' stroke="rgba(180,215,250,0.75)"';
+    html += ' stroke-width="0.7"';
+    html += ' style="cursor:pointer;transition:fill-opacity 0.2s"';
+    html += ' onclick="clickSigungu(\''+s.n.replace(/'/g, "\\'")+'\')"';
+    html += ' onmouseover="this.setAttribute(\'fill-opacity\',\'0.75\')"';
+    html += ' onmouseout="this.setAttribute(\'fill-opacity\',\''+fillOp+'\')"';
+    html += '><title>' + s.n + (st ? ' · 평균 '+st.avg.toFixed(0)+'% · n='+st.count : ' · 데이터 없음') + '</title></path>';
+  }
+  
+  /* 2단계: 각 시·군 이름 라벨 (path 중심에 표시) */
   for(var j=0;j<sigungus.length;j++){
     var sj = sigungus[j];
-    /* ★ v14.3: 제외 시·군 라벨도 표시 안 함 */
     if(excludeList.indexOf(sj.n) !== -1) continue;
-    /* path d 문자열에서 좌표만 추출해서 bbox 계산
-       SIGUNGU_PATHS는 절대 좌표(M, L)라서 단순 파싱 가능 */
+    
     var nums = sj.d.match(/-?\d+\.?\d*/g);
     if(!nums || nums.length < 4) continue;
     var minX=Infinity, maxX=-Infinity, minY=Infinity, maxY=-Infinity;
@@ -7430,13 +7477,9 @@ function renderSigunguBorders(regionId){
     var cy = (minY + maxY) / 2;
     var width = maxX - minX;
     
-    /* 시·군이 너무 작으면 라벨 생략 (광역시 구 등) */
     if(width < 8) continue;
     
-    /* 폰트 크기 — 시·군 크기에 비례 (3.5~5.5 사이) */
     var fontSize = Math.max(3.5, Math.min(5.5, width / 6));
-    
-    /* 긴 이름은 줄여서 (포항시북구 → 포항북구) */
     var label = sj.n.replace(/^포항시/, '포항').replace(/^창원시/, '창원');
     
     html += '<text x="' + cx.toFixed(1) + '" y="' + cy.toFixed(1) + '"';
@@ -7449,9 +7492,59 @@ function renderSigunguBorders(regionId){
   }
   
   sgrp.innerHTML = html;
-  
-  /* fade-in — 약간의 지연 후 */
   setTimeout(function(){ sgrp.style.opacity = '1'; }, 50);
+}
+
+/* ★ 2026-05-22 v14.5: 시·군 클릭 시 상세 패널 표시 */
+function clickSigungu(cityName){
+  var records = (typeof loadAllRecords === 'function') ? loadAllRecords() : [];
+  var matched = [];
+  for(var i=0;i<records.length;i++){
+    var rec = records[i];
+    if((rec.sigungu || '').trim() === cityName){
+      matched.push(rec);
+    }
+  }
+  
+  var panel = document.getElementById('sigunguDetailPanel');
+  if(!panel){
+    /* 패널이 없으면 동적 생성 */
+    panel = document.createElement('div');
+    panel.id = 'sigunguDetailPanel';
+    panel.style.cssText = 'position:absolute;left:14px;bottom:14px;z-index:11;padding:10px 14px;background:rgba(13,13,16,0.92);border:1px solid rgba(127,198,245,0.4);color:#f0ead6;border-radius:8px;font-family:var(--fm);backdrop-filter:blur(4px);min-width:180px;max-width:260px;font-size:12px';
+    var svgWrap = document.getElementById('svgMapWrap');
+    if(svgWrap) svgWrap.appendChild(panel);
+  }
+  
+  var html = '';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
+  html += '<span style="font-weight:700;font-size:13px;color:var(--cream)">'+cityName+'</span>';
+  html += '<span onclick="document.getElementById(\'sigunguDetailPanel\').style.display=\'none\'" style="cursor:pointer;color:var(--muted);font-size:14px;padding:0 4px">×</span>';
+  html += '</div>';
+  
+  if(matched.length === 0){
+    html += '<div style="color:var(--muted);font-size:11px">아직 데이터가 없습니다</div>';
+  } else {
+    var sum = 0;
+    for(var m=0;m<matched.length;m++) sum += (matched[m].avg || 0);
+    var avg = sum / matched.length;
+    var card = (typeof getCard === 'function') ? getCard(avg) : {color:'#9d9d77', label:''};
+    var trust = matched.length >= 5 ? '신뢰' : '참고용';
+    var trustCol = matched.length >= 5 ? card.color : 'var(--muted)';
+    
+    html += '<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px">';
+    html += '<span style="font-size:24px;font-weight:800;color:'+card.color+'">'+avg.toFixed(1)+'%</span>';
+    html += '<span style="font-size:11px;color:var(--muted)">평균 착색률</span>';
+    html += '</div>';
+    
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--muted);padding-top:4px;border-top:1px solid rgba(127,198,245,0.18)">';
+    html += '<span>표본: <b style="color:var(--cream)">'+matched.length+'장</b></span>';
+    html += '<span style="color:'+trustCol+'">'+trust+'</span>';
+    html += '</div>';
+  }
+  
+  panel.innerHTML = html;
+  panel.style.display = 'block';
 }
 
 /* 시별 마커 렌더 — records에서 sigungu별 평균 계산
