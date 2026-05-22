@@ -7420,7 +7420,8 @@ function renderSigunguBorders(regionId){
     var city = (rec.sigungu || '').trim();
     if(!city) continue;
     if(!cityStats[city]) cityStats[city] = {sum:0, count:0};
-    cityStats[city].sum += (rec.avg || 0);
+    /* ★ 2026-05-22 v14.8: 핵심 버그 수정 - record는 'avg'가 아니라 'pct' 필드 사용 */
+    cityStats[city].sum += (rec.pct || 0);
     cityStats[city].count += 1;
   }
   for(var ck in cityStats){
@@ -7531,9 +7532,10 @@ function clickSigungu(cityName){
     html += '<div style="text-align:center;padding:14px 0;color:var(--muted);font-size:12px">아직 측정 데이터가 없습니다</div>';
     html += '<div style="text-align:center;font-size:10px;color:var(--muted);opacity:0.7">이 시·군에서 측정한 사진을 저장하면 여기에 표시됩니다</div>';
   } else {
-    /* 평균 + 표본 수 계산 */
+    /* 평균 + 표본 수 계산
+       ★ v14.8: record는 'avg'가 아니라 'pct' 필드 사용 (기존 코드와 일치) */
     var sum = 0;
-    for(var m=0;m<matched.length;m++) sum += (matched[m].avg || 0);
+    for(var m=0;m<matched.length;m++) sum += (matched[m].pct || 0);
     var avg = sum / matched.length;
     var cardObj = (typeof getCard === 'function') ? getCard(avg) : {color:'#9d9d77', label:'-'};
     var trust = matched.length >= 5 ? '신뢰' : '참고용';
@@ -7550,8 +7552,8 @@ function clickSigungu(cityName){
     /* 등급 분포 G1~G5 */
     var gradeCnt = {G1:0, G2:0, G3:0, G4:0, G5:0};
     for(var g=0;g<matched.length;g++){
-      var gAvg = matched[g].avg || 0;
-      var gCard = (typeof getCard === 'function') ? getCard(gAvg) : null;
+      var gPct = matched[g].pct || 0;
+      var gCard = (typeof getCard === 'function') ? getCard(gPct) : null;
       if(gCard && gCard.label){
         var gKey = gCard.label.split(' ')[0]; /* "G3 (양호)" → "G3" */
         if(gradeCnt[gKey] !== undefined) gradeCnt[gKey] += 1;
@@ -7836,7 +7838,8 @@ function renderTopCities(){
     var city = (rec.sigungu || '').trim();
     if(!city || city === '위치미상') continue;
     if(!byCity[city]) byCity[city] = {sum:0, count:0, name:city};
-    byCity[city].sum += (rec.avg || 0);
+    /* ★ v14.8: record는 'pct' 필드 사용 (avg 아님) */
+    byCity[city].sum += (rec.pct || 0);
     byCity[city].count += 1;
   }
   
