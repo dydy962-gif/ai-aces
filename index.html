@@ -551,162 +551,262 @@ nav{
 </head>
 <body>
 
-<!-- ════ KREI 스플래시 — V3 최종 (파란색 가로 헤드라인 + 하단 메타 띠) ════ -->
+<!-- ════ KREI 스플래시 - v15.8 KREI 인장 로고 메인 + 메타 강조 ════ -->
 <style>
-@keyframes kreiFadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
-@keyframes kreiRingPulse{0%,100%{opacity:.5}50%{opacity:.85}}
-@keyframes kreiDotBlink{0%,100%{opacity:.3}50%{opacity:1}}
-@keyframes kreiScanV{0%{top:-30px;opacity:0}10%,90%{opacity:.6}100%{top:calc(100% + 30px);opacity:0}}
+/* ★ 2026-05-23 v15.8: 표지 - KREI 원형 인장 로고가 메인
+   사용자 요청: KREI 로고를 제일 크게 + 93%/G1 제거 + 하단 메타 크게
+   - 원형 인장 로고 SVG (외곽 영문 + 가운데 KREI + 외곽 한글)
+   - 93% / G1 / 스펙트럼 제거
+   - 좌/우 데이터 + 하단 상태바 더 크게 */
+
+@keyframes krRingDraw{
+  from{stroke-dashoffset:1056}
+  to{stroke-dashoffset:0}
+}
+@keyframes krFadeIn{
+  from{opacity:0;transform:translateY(8px)}
+  to{opacity:1;transform:translateY(0)}
+}
+@keyframes krFadeInRight{
+  from{opacity:0;transform:translateX(-10px)}
+  to{opacity:1;transform:translateX(0)}
+}
+@keyframes krFadeInLeft{
+  from{opacity:0;transform:translateX(10px)}
+  to{opacity:1;transform:translateX(0)}
+}
+@keyframes krLogoIn{
+  0%{opacity:0;transform:scale(1.3)}
+  60%{opacity:1;transform:scale(0.96)}
+  100%{opacity:1;transform:scale(1)}
+}
+@keyframes krBlink{
+  0%,100%{opacity:.3}
+  50%{opacity:1}
+}
+@keyframes krScanLine{
+  0%{top:0;opacity:0}
+  10%,90%{opacity:1}
+  100%{top:100%;opacity:0}
+}
+@keyframes krGlowPulse{
+  0%,100%{filter:drop-shadow(0 0 0 rgba(0,217,184,0)) drop-shadow(0 6px 20px rgba(0,0,0,0.3))}
+  50%{filter:drop-shadow(0 0 24px rgba(0,217,184,0.4)) drop-shadow(0 6px 20px rgba(0,0,0,0.3))}
+}
 
 #kreiSplash{
   position:fixed;inset:0;z-index:9999;
-  background:radial-gradient(ellipse at top, #082b4a 0%, #04101c 70%);
-  color:#fff;
+  background:#040608;
+  color:#e8f4f0;
   display:flex;flex-direction:column;
-  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Pretendard',sans-serif;
+  align-items:center;justify-content:center;
+  font-family:-apple-system,BlinkMacSystemFont,'Pretendard',sans-serif;
   transition:opacity .6s ease-out, visibility .6s;
+  overflow:hidden;
 }
 #kreiSplash.fade-out{opacity:0;visibility:hidden;pointer-events:none}
 
-/* 배경 동심원 워터마크 */
-.kr-bg-svg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:min(60vw,380px);height:min(60vw,380px);opacity:.12;pointer-events:none}
-.kr-bg-svg circle{fill:none;stroke:#7fc6f5;stroke-width:1}
+#kreiSplash::before{
+  content:'';position:absolute;inset:0;
+  background-image:
+    linear-gradient(rgba(0,217,184,0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,217,184,0.06) 1px, transparent 1px);
+  background-size:40px 40px;
+  mask-image:radial-gradient(ellipse at center, black 30%, transparent 80%);
+  -webkit-mask-image:radial-gradient(ellipse at center, black 30%, transparent 80%);
+  pointer-events:none;
+}
 
-/* 코너 마커 4개 */
-.kr-corner{position:absolute;width:18px;height:18px;border:1.2px solid rgba(74,159,217,.5);animation:kreiFadeUp .6s ease-out .15s both}
+.kr-scan{
+  position:absolute;left:0;right:0;height:1px;top:0;
+  background:linear-gradient(90deg, transparent, #00d9b8 50%, transparent);
+  box-shadow:0 0 8px rgba(0,217,184,0.5);
+  animation:krScanLine 4s ease-in-out infinite;
+  pointer-events:none;
+}
+
+.kr-corner{
+  position:absolute;width:24px;height:24px;
+  border:1px solid #00d9b8;
+  opacity:0;
+  animation:krFadeIn .4s ease-out .1s both;
+}
 .kr-corner.tl{top:18px;left:18px;border-right:none;border-bottom:none}
 .kr-corner.tr{top:18px;right:18px;border-left:none;border-bottom:none}
 .kr-corner.bl{bottom:18px;left:18px;border-right:none;border-top:none}
 .kr-corner.br{bottom:18px;right:18px;border-left:none;border-top:none}
 
-/* 스캔 라인 */
-.kr-scan-line{position:absolute;left:30px;right:30px;height:1px;background:linear-gradient(90deg,transparent,#7fc6f5,transparent);animation:kreiScanV 4s ease-in-out infinite;pointer-events:none}
-
-/* 상단 메인 영역 */
-.kr-top{
-  flex:1;display:flex;flex-direction:column;
-  align-items:center;justify-content:center;
-  padding:32px;gap:22px;
-  position:relative;z-index:2;
-}
-
-.kr-spec{
+.kr-top-label{
+  position:absolute;top:38px;left:50%;
+  transform:translateX(-50%);
+  display:flex;align-items:center;gap:10px;
   font-family:'JetBrains Mono','Courier New',monospace;
-  font-size:10px;color:rgba(74,159,217,.7);
+  font-size:11px;color:#00d9b8;
   letter-spacing:.3em;text-transform:uppercase;
-  animation:kreiFadeUp .6s ease-out both;
+  opacity:0;animation:krFadeIn .5s ease-out .3s both;
+}
+.kr-top-label .dot{
+  width:6px;height:6px;border-radius:50%;
+  background:#00d9b8;
+  box-shadow:0 0 8px #00d9b8;
+  animation:krBlink 1.5s ease-in-out infinite;
 }
 
-/* 로고 행 — KREI 마크 + 한국농촌경제연구원 */
-.kr-logo-row{
-  display:flex;align-items:center;gap:18px;
-  animation:kreiFadeUp .7s ease-out .2s both;
+.kr-center{
+  position:relative;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  z-index:2;
 }
 
-.kr-mark{
-  width:80px;height:80px;border-radius:50%;background:#fff;
-  display:flex;align-items:center;justify-content:center;
-  position:relative;flex-shrink:0;
-  box-shadow:0 6px 28px rgba(0,0,0,.4),0 0 0 1px rgba(255,255,255,.08);
+/* ★ KREI 인장 로고 (메인 요소, 매우 크게) */
+.kr-emblem{
+  position:relative;width:340px;height:340px;
+  opacity:0;
+  animation:krLogoIn 1.0s cubic-bezier(0.5,1.4,0.6,1) 0.6s both;
 }
-.kr-mark::before{
-  content:'';position:absolute;width:30px;height:30px;
-  background:#0066b2;border-radius:0 100% 0 100%;
-  transform:rotate(-45deg);top:18px;left:25px;
-}
-.kr-mark-r{
-  position:relative;font-family:'Fraunces',Georgia,serif;
-  font-size:42px;font-weight:900;color:#003a66;
-  z-index:1;line-height:1;margin-top:5px;margin-left:-3px;letter-spacing:-2px;
+.kr-emblem-svg{
+  width:100%;height:100%;
+  animation:krGlowPulse 4s ease-in-out 2.5s infinite;
 }
 
-.kr-logo-text{display:flex;flex-direction:column;text-align:left}
-.kr-logo-ko{
-  font-family:'Fraunces',Georgia,serif;
-  font-size:30px;font-weight:900;color:#fff;
-  letter-spacing:-1px;line-height:1;
+/* 외곽 그리는 링 (인장 외곽선) */
+.kr-emblem-ring-draw{
+  fill:none;
+  stroke:#00d9b8;
+  stroke-width:2;
+  stroke-dasharray:1056;
+  stroke-dashoffset:1056;
+  animation:krRingDraw 1.6s cubic-bezier(0.45,0,0.55,1) 0.4s forwards;
+  filter:drop-shadow(0 0 6px rgba(0,217,184,0.5));
 }
-.kr-logo-en{
+
+/* 좌/우 데이터 메트릭 (더 크게) */
+.kr-data-left{
+  position:absolute;left:40px;top:50%;
+  transform:translateY(-50%);
+  display:flex;flex-direction:column;gap:18px;
   font-family:'JetBrains Mono','Courier New',monospace;
-  font-size:11px;color:rgba(74,159,217,.7);
-  letter-spacing:.2em;text-transform:uppercase;margin-top:4px;
+  font-size:11px;color:rgba(0,217,184,0.65);
+  letter-spacing:.12em;
+}
+.kr-data-left > div{
+  opacity:0;
+  animation:krFadeInRight .4s ease-out both;
+}
+.kr-data-left > div:nth-child(1){animation-delay:1.4s}
+.kr-data-left > div:nth-child(2){animation-delay:1.55s}
+.kr-data-left > div:nth-child(3){animation-delay:1.7s}
+.kr-data-left > div:nth-child(4){animation-delay:1.85s}
+.kr-data-left b{color:#00d9b8;font-weight:600;font-size:13px}
+.kr-data-left .label{
+  font-size:8px;color:rgba(0,217,184,0.4);
+  letter-spacing:.2em;text-transform:uppercase;
+  display:block;margin-bottom:3px;
 }
 
-/* 부제 — Color Analysis for Apples */
-.kr-sub{
-  font-family:'Fraunces',Georgia,serif;
-  font-weight:400;font-style:italic;
-  font-size:22px;color:rgba(255,255,255,.85);
-  text-align:center;line-height:1.15;letter-spacing:-.3px;
-  animation:kreiFadeUp .7s ease-out .4s both;
+.kr-data-right{
+  position:absolute;right:40px;top:50%;
+  transform:translateY(-50%);
+  display:flex;flex-direction:column;gap:18px;
+  text-align:right;
+  font-family:'JetBrains Mono','Courier New',monospace;
+  font-size:11px;color:rgba(0,217,184,0.65);
+  letter-spacing:.12em;
+}
+.kr-data-right > div{
+  opacity:0;
+  animation:krFadeInLeft .4s ease-out both;
+}
+.kr-data-right > div:nth-child(1){animation-delay:1.4s}
+.kr-data-right > div:nth-child(2){animation-delay:1.55s}
+.kr-data-right > div:nth-child(3){animation-delay:1.7s}
+.kr-data-right > div:nth-child(4){animation-delay:1.85s}
+.kr-data-right b{color:#00d9b8;font-weight:600;font-size:13px}
+.kr-data-right .label{
+  font-size:8px;color:rgba(0,217,184,0.4);
+  letter-spacing:.2em;text-transform:uppercase;
+  display:block;margin-bottom:3px;
 }
 
-/* 하단 메타 띠 — 작게 */
-.kr-bottom{
-  background:rgba(0,0,0,.35);
-  border-top:1px solid rgba(74,159,217,.15);
-  padding:9px 22px;
-  display:flex;justify-content:space-between;align-items:center;
-  backdrop-filter:blur(10px);
-  animation:kreiFadeUp .6s ease-out .85s both;
-}
-.kr-meta-group{display:flex;gap:20px}
-.kr-meta{display:flex;align-items:baseline;gap:6px}
-.kr-meta-k{
+/* 하단 상태바 (더 크게) */
+.kr-status-bar{
+  position:absolute;bottom:140px;left:50%;
+  transform:translateX(-50%);
+  display:flex;align-items:center;gap:24px;
   font-family:'JetBrains Mono','Courier New',monospace;
-  font-size:8px;color:rgba(74,159,217,.7);
-  letter-spacing:.12em;text-transform:uppercase;
+  font-size:12px;color:rgba(0,217,184,0.75);
+  letter-spacing:.2em;text-transform:uppercase;
+  opacity:0;
+  animation:krFadeIn .5s ease-out 2.0s both;
 }
-.kr-meta-v{
-  font-family:'Fraunces',Georgia,serif;
-  font-size:11px;font-weight:700;color:#fff;letter-spacing:-.2px;line-height:1;
+.kr-status-bar .sep{
+  width:1px;height:14px;background:rgba(0,217,184,0.3);
 }
-.kr-meta-v em{color:#7fc6f5;font-style:normal}
-.kr-loading{
-  display:flex;align-items:center;gap:6px;
-  font-family:'JetBrains Mono','Courier New',monospace;
-  font-size:8px;color:rgba(74,159,217,.7);
-  letter-spacing:.12em;text-transform:uppercase;
+.kr-status-bar .active{color:#00d9b8;display:flex;align-items:center;gap:8px;font-weight:600}
+.kr-status-bar .active::before{
+  content:'';width:7px;height:7px;border-radius:50%;
+  background:#00d9b8;box-shadow:0 0 8px #00d9b8;
+  animation:krBlink 1.2s ease-in-out infinite;
 }
-.kr-dots{display:flex;gap:3px}
-.kr-d{
-  width:3px;height:3px;border-radius:50%;background:#7fc6f5;
-  animation:kreiDotBlink 1.4s ease-in-out infinite;
-}
-.kr-d:nth-child(2){animation-delay:.2s}
-.kr-d:nth-child(3){animation-delay:.4s}
 
-/* Skip 버튼 */
-.kr-skip{
-  position:absolute;top:18px;right:60px;z-index:3;
-  background:transparent;border:1px solid rgba(127,198,245,.25);
-  color:rgba(127,198,245,.7);
-  font-family:'JetBrains Mono','Courier New',monospace;
-  font-size:10px;letter-spacing:.15em;text-transform:uppercase;
-  padding:5px 12px;border-radius:4px;cursor:pointer;
-  transition:all .2s ease;
-  animation:kreiFadeUp .6s ease-out 1.4s both;
+/* 다음 버튼 */
+.kr-next{
+  position:absolute;bottom:60px;right:60px;
+  z-index:5;
+  display:flex;align-items:center;gap:10px;
+  background:rgba(0,217,184,0.08);
+  border:1.5px solid rgba(0,217,184,0.5);
+  color:#e8f4f0;
+  font-family:'Pretendard','-apple-system',sans-serif;
+  font-size:14px;font-weight:600;
+  letter-spacing:.1em;
+  padding:14px 32px;border-radius:4px;cursor:pointer;
+  transition:all .25s ease;
+  opacity:0;
+  animation:krFadeIn .6s ease-out 0.5s both;
 }
-.kr-skip:hover{background:rgba(127,198,245,.1);color:#7fc6f5;border-color:rgba(127,198,245,.5)}
+.kr-next:hover{
+  background:rgba(0,217,184,0.18);
+  color:#00d9b8;
+  border-color:#00d9b8;
+  box-shadow:0 0 20px rgba(0,217,184,0.4);
+  transform:translateY(-2px);
+}
+.kr-next:active{transform:translateY(0)}
+.kr-next-arrow{
+  font-size:16px;color:#00d9b8;
+  transition:transform .25s ease;
+}
+.kr-next:hover .kr-next-arrow{transform:translateX(4px)}
+.kr-next-hint{
+  position:absolute;bottom:32px;right:60px;
+  font-family:'JetBrains Mono','Courier New',monospace;
+  font-size:9px;color:rgba(0,217,184,0.5);
+  letter-spacing:.2em;text-transform:uppercase;
+  white-space:nowrap;
+  opacity:0;
+  animation:krFadeIn .5s ease-out 0.8s both;
+}
 
 /* 모바일 반응형 */
 @media(max-width:680px){
-  .kr-top{padding:24px;gap:18px}
-  .kr-logo-row{gap:14px;flex-direction:column;text-align:center}
-  .kr-logo-text{text-align:center;align-items:center}
-  .kr-logo-ko{font-size:24px}
-  .kr-mark{width:70px;height:70px}
-  .kr-mark::before{width:26px;height:26px;top:16px;left:22px}
-  .kr-mark-r{font-size:36px}
-  .kr-sub{font-size:18px}
-  .kr-bottom{padding:8px 14px;flex-direction:column;gap:6px;align-items:center}
-  .kr-meta-group{gap:14px}
-  .kr-skip{top:14px;right:14px;font-size:9px;padding:4px 10px}
+  .kr-emblem{width:260px;height:260px}
+  .kr-data-left, .kr-data-right{display:none}
+  .kr-top-label{font-size:9px;letter-spacing:.25em;top:30px}
+  .kr-status-bar{font-size:10px;gap:14px;bottom:128px;letter-spacing:.15em}
+  /* 모바일에선 다음 버튼 가운데로 (좁은 화면에서 우측 끝 답답) */
+  .kr-next{bottom:54px;right:auto;left:50%;transform:translateX(-50%);font-size:13px;padding:12px 26px}
+  .kr-next:hover{transform:translateX(-50%) translateY(-2px)}
+  .kr-next:active{transform:translateX(-50%) translateY(0)}
+  .kr-next-hint{bottom:28px;right:auto;left:50%;transform:translateX(-50%);font-size:8px}
+  .kr-corner{width:18px;height:18px;top:14px;left:14px}
+  .kr-corner.tr{right:14px}
+  .kr-corner.bl{bottom:14px;left:14px}
+  .kr-corner.br{bottom:14px;right:14px}
 }
 @media(max-width:380px){
-  .kr-logo-ko{font-size:20px}
-  .kr-sub{font-size:16px}
-  .kr-spec{font-size:9px;letter-spacing:.2em}
+  .kr-emblem{width:220px;height:220px}
+  .kr-status-bar{font-size:9px;gap:10px}
 }
 </style>
 
@@ -715,59 +815,104 @@ nav{
   <div class="kr-corner tr"></div>
   <div class="kr-corner bl"></div>
   <div class="kr-corner br"></div>
-  <div class="kr-scan-line"></div>
-
-  <svg class="kr-bg-svg" viewBox="0 0 380 380" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="190" cy="190" r="180"/>
-    <circle cx="190" cy="190" r="140"/>
-    <circle cx="190" cy="190" r="100"/>
-    <circle cx="190" cy="190" r="60"/>
-  </svg>
-
-  <button class="kr-skip" onclick="hideKreiSplash()" title="건너뛰기 (Enter / Esc / Space)">Skip ›</button>
-
-  <div class="kr-top">
-    <div class="kr-spec">SPECIMEN · 0247 · ChromaScan</div>
-
-    <div class="kr-logo-row">
-      <div class="kr-mark"><div class="kr-mark-r">R</div></div>
-      <div class="kr-logo-text">
-        <div class="kr-logo-ko">한국농촌경제연구원</div>
-        <div class="kr-logo-en">Korea Rural Economic Institute</div>
-      </div>
-    </div>
-
-    <div class="kr-sub">Color Analysis for Apples</div>
+  
+  <div class="kr-scan"></div>
+  
+  <!-- 좌측 데이터 (크게) -->
+  <div class="kr-data-left">
+    <div><span class="label">Sensor</span><b>SAM3</b></div>
+    <div><span class="label">Color Space</span><b>L*a*b*</b></div>
+    <div><span class="label">Standard</span><b>NIAS</b></div>
+    <div><span class="label">ROI Acc.</span><b>97.2%</b></div>
   </div>
-
-  <div class="kr-bottom">
-    <div class="kr-meta-group">
-      <div class="kr-meta"><span class="kr-meta-k">Model</span><span class="kr-meta-v">SAM<em>3</em></span></div>
-      <div class="kr-meta"><span class="kr-meta-k">Color</span><span class="kr-meta-v">L*a*b*</span></div>
-      <div class="kr-meta"><span class="kr-meta-k">Std</span><span class="kr-meta-v">NIAS</span></div>
-    </div>
-    <div class="kr-loading">
-      <span>Loading</span>
-      <div class="kr-dots">
-        <div class="kr-d"></div>
-        <div class="kr-d"></div>
-        <div class="kr-d"></div>
-      </div>
+  
+  <!-- 우측 데이터 (크게) -->
+  <div class="kr-data-right">
+    <div><span class="label">Delta-E</span><b>0.045</b></div>
+    <div><span class="label">White Bal.</span><b>5760K</b></div>
+    <div><span class="label">Depth</span><b>16-bit</b></div>
+    <div><span class="label">Status</span><b>READY</b></div>
+  </div>
+  
+  <div class="kr-center">
+    <!-- ★ KREI 인장 로고 (메인 요소) -->
+    <div class="kr-emblem">
+      <svg class="kr-emblem-svg" viewBox="0 0 340 340" xmlns="http://www.w3.org/2000/svg">
+        <!-- 외곽 큰 원 (그리는 애니메이션) -->
+        <circle class="kr-emblem-ring-draw" cx="170" cy="170" r="168"/>
+        <!-- 내부 두 번째 원 (얇은 보조선) -->
+        <circle cx="170" cy="170" r="156" fill="none" stroke="rgba(0,217,184,0.35)" stroke-width="1"/>
+        
+        <!-- 좌/우 점 장식 -->
+        <circle cx="2" cy="170" r="3" fill="#00d9b8"/>
+        <circle cx="338" cy="170" r="3" fill="#00d9b8"/>
+        
+        <!-- 위쪽 영문 (반원 따라가는 텍스트) -->
+        <defs>
+          <path id="kr-top-arc" d="M 22,170 A 148,148 0 0 1 318,170"/>
+          <path id="kr-bottom-arc" d="M 22,170 A 148,148 0 0 0 318,170"/>
+        </defs>
+        <text font-family="-apple-system, 'Pretendard', sans-serif"
+              font-size="17" font-weight="600"
+              fill="rgba(232,244,240,0.9)"
+              letter-spacing="3">
+          <textPath href="#kr-top-arc" startOffset="50%" text-anchor="middle">
+            KOREA RURAL ECONOMIC INSTITUTE
+          </textPath>
+        </text>
+        
+        <!-- 아래쪽 한글 (반원 따라가는 텍스트) -->
+        <text font-family="-apple-system, 'Pretendard', sans-serif"
+              font-size="19" font-weight="600"
+              fill="rgba(232,244,240,0.9)"
+              letter-spacing="6">
+          <textPath href="#kr-bottom-arc" startOffset="50%" text-anchor="middle">
+            한국농촌경제연구원
+          </textPath>
+        </text>
+        
+        <!-- 가운데 KREI 큰 글자 -->
+        <text x="170" y="192"
+              text-anchor="middle"
+              font-family="-apple-system, 'Pretendard', 'Arial Black', sans-serif"
+              font-size="84" font-weight="900"
+              fill="#00d9b8"
+              letter-spacing="-3"
+              style="filter:drop-shadow(0 0 12px rgba(0,217,184,0.4))">
+          KREI
+        </text>
+      </svg>
     </div>
   </div>
+  
+  <!-- 하단 상태바 (크게) -->
+  <div class="kr-status-bar">
+    <span class="active">SYSTEM ONLINE</span>
+    <span class="sep"></span>
+    <span>NIAS · L*a*b*</span>
+    <span class="sep"></span>
+    <span>2026 · v22</span>
+  </div>
+  
+  <!-- 다음 버튼 -->
+  <button class="kr-next" onclick="hideKreiSplash()" title="시작하기">
+    <span>다음</span>
+    <span class="kr-next-arrow">→</span>
+  </button>
+  <div class="kr-next-hint">ENTER · SPACE · ESC</div>
 </div>
+
 <script>
 function hideKreiSplash(){
   var s=document.getElementById('kreiSplash');
   if(s){s.classList.add('fade-out');setTimeout(function(){s.style.display='none';},600);}
   try{localStorage.setItem('kreiSplashSeen',Date.now());}catch(e){}
 }
-/* 첫 방문 2.5초, 재방문 1.4초 — 매일 쓰는 도구라 재방문은 짧게 */
+/* ★ 2026-05-23 v15.7: 자동 닫힘 제거 - 사용자가 '다음 →' 버튼으로 직접 넘김
+   이전: 첫 방문 2.5초, 재방문 1.4초 자동 닫힘
+   현재: 자동 안 닫힘. Enter/Esc/Space 단축키만 유지 */
 (function(){
-  var seen=false;
-  try{seen=!!localStorage.getItem('kreiSplashSeen');}catch(e){}
-  setTimeout(hideKreiSplash, seen?1400:2500);
-  /* 키보드 단축키 — Enter / Esc / Space 로 건너뛰기 */
+  /* 키보드 단축키 — Enter / Esc / Space 로 다음으로 */
   function skipKey(e){
     if(e.key==='Enter'||e.key==='Escape'||e.key===' '){
       hideKreiSplash();
