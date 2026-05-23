@@ -677,6 +677,32 @@ nav{
   animation:krGlowPulse 4s ease-in-out 2.5s infinite;
 }
 
+/* ★ v15.18: 인장 아래 사과 착색도 태그라인 (영문/한글)
+   인장과 적당한 여백 두고 차분한 톤으로 */
+.kr-tagline-en{
+  margin-top:clamp(28px, 3.5vh, 48px);  /* 인장과 거리 */
+  font-family:-apple-system,'Pretendard',sans-serif;
+  font-size:clamp(13px, 1.1vw, 18px);
+  font-weight:500;
+  color:rgba(232,244,240,0.78);
+  letter-spacing:.18em;
+  text-transform:uppercase;
+  text-align:center;
+  opacity:0;
+  animation:krFadeIn .7s ease-out 1.8s both;
+}
+.kr-tagline-ko{
+  margin-top:clamp(8px, 0.8vh, 14px);
+  font-family:-apple-system,'Pretendard',sans-serif;
+  font-size:clamp(11px, 0.85vw, 14px);
+  font-weight:400;
+  color:rgba(0,217,184,0.6);
+  letter-spacing:.25em;
+  text-align:center;
+  opacity:0;
+  animation:krFadeIn .6s ease-out 2.1s both;
+}
+
 /* 외곽 그리는 링 (인장 외곽선) */
 .kr-emblem-ring-draw{
   fill:none;
@@ -847,14 +873,17 @@ nav{
 }
 
 /* 다른 요소들은 인장이 슬라이드 시작한 후 (0.2초 지연) 페이드 아웃
-   슬라이드가 진행 중일 때 사라지므로 사용자가 슬라이드 잘 보임 */
+   슬라이드가 진행 중일 때 사라지므로 사용자가 슬라이드 잘 보임
+   ★ v15.19: 태그라인 두 개도 같이 페이드 (인장만 안 사라지고 텍스트만 남는 문제 해결) */
 #kreiSplash.is-flying .kr-data-left,
 #kreiSplash.is-flying .kr-data-right,
 #kreiSplash.is-flying .kr-status-bar,
 #kreiSplash.is-flying .kr-next,
 #kreiSplash.is-flying .kr-next-hint,
 #kreiSplash.is-flying .kr-corner,
-#kreiSplash.is-flying .kr-scan{
+#kreiSplash.is-flying .kr-scan,
+#kreiSplash.is-flying .kr-tagline-en,
+#kreiSplash.is-flying .kr-tagline-ko{
   animation:krFlyFade 0.3s ease-out 0.2s forwards;
 }
 @keyframes krFlyFade{
@@ -964,6 +993,10 @@ body.is-revealing .page.active{
         </text>
       </svg>
     </div>
+    
+    <!-- ★ v15.18: 인장 아래 사과 착색도 관련 태그라인 (영문 + 한글) -->
+    <div class="kr-tagline-en">Precision Apple Coloration Analysis</div>
+    <div class="kr-tagline-ko">후지사과 착색도 정밀 측정 시스템</div>
   </div>
   
   <!-- 하단 상태바 (크게) -->
