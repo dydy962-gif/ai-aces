@@ -4684,6 +4684,21 @@ function addPhoto(file){
         if(dateStr){
           obj.captureDate=dateStr;
           console.log('[Photo EXIF] 📅 사진 #'+(idx+1)+' 촬영 시간: '+dateStr);
+          /* ★ v15.21: 현재 선택된 사진의 EXIF 촬영일을 harvestDate input에 자동 입력
+             → 2주 평균 날씨가 촬영 시점 기준으로 자동 갱신됨
+             단, 사용자가 이미 직접 입력했으면 덮어쓰지 않음 */
+          if(idx===aIdx){
+            var hInput=document.getElementById('harvestDate');
+            if(hInput && (!hInput.value || hInput.dataset.autoFilled==='1')){
+              hInput.value=dateStr;
+              hInput.dataset.autoFilled='1';
+              console.log('[Photo EXIF] harvestDate 자동 입력:', dateStr);
+              /* 날씨 다시 로드 (GPS도 있으면) */
+              if(lat&&lon && typeof loadWeatherGrid==='function'){
+                setTimeout(function(){loadWeatherGrid(lat,lon);},300);
+              }
+            }
+          }
         }
         if(lat&&lon){
           obj.gps={lat:lat,lon:lon,source:'EXIF',address:null,region:null};
@@ -5702,7 +5717,52 @@ function loadWeatherGrid(lat,lon){
 
   console.log('[Weather] Protocol:', window.location.protocol);
 
-  var url='https://api.open-meteo.com/v1/forecast?latitude='+lat+'&longitude='+lon+'&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weather_code,sunshine_duration&past_days=14&forecast_days=1&timezone=Asia%2FSeoul';
+  /* ★ v15.21: 수확일(촬영일) 기준 2주 날씨 가져오기
+     이전: past_days=14 → 항상 오늘 기준 (사진이 작년 9월이어도 올해 5월 데이터 나옴)
+     변경: 수확일 우선 → 현재 사진의 captureDate → 오늘 폴백
+     start_date, end_date로 정확한 날짜 범위 지정 */
+  var targetDate = null;
+  /* 1) harvestDate input 값 우선 */
+  var harvestVal = document.getElementById('harvestDate').value;
+  if(harvestVal && /^\d{4}-\d{2}-\d{2}$/.test(harvestVal)){
+    targetDate = harvestVal;
+    console.log('[Weather] 기준일 = harvestDate input:', targetDate);
+  }
+  /* 2) 현재 선택 사진의 EXIF 촬영일 */
+  if(!targetDate && typeof aIdx !== 'undefined' && aIdx >= 0 && photos[aIdx] && photos[aIdx].captureDate){
+    targetDate = photos[aIdx].captureDate;
+    console.log('[Weather] 기준일 = 사진 EXIF captureDate:', targetDate);
+  }
+  /* 3) 폴백 = 오늘 */
+  if(!targetDate){
+    targetDate = new Date().toISOString().slice(0,10);
+    console.log('[Weather] 기준일 = 오늘 (폴백):', targetDate);
+  }
+  
+  /* 종료일 = 기준일, 시작일 = 기준일 -13일 (총 14일) */
+  var endDate = targetDate;
+  var startDateObj = new Date(targetDate);
+  startDateObj.setDate(startDateObj.getDate() - 13);
+  var startDate = startDateObj.toISOString().slice(0,10);
+  
+  /* Open-Meteo: 과거 데이터는 archive-api 사용해야 정확
+     forecast API는 미래 + 최근 며칠만, 더 오래된 건 archive-api */
+  var today = new Date().toISOString().slice(0,10);
+  var useArchive = (endDate < today); /* 종료일이 오늘보다 과거면 archive 사용 */
+  
+  var url;
+  if(useArchive){
+    url='https://archive-api.open-meteo.com/v1/archive?latitude='+lat+'&longitude='+lon
+      +'&start_date='+startDate+'&end_date='+endDate
+      +'&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weather_code,sunshine_duration'
+      +'&timezone=Asia%2FSeoul';
+  } else {
+    url='https://api.open-meteo.com/v1/forecast?latitude='+lat+'&longitude='+lon
+      +'&start_date='+startDate+'&end_date='+endDate
+      +'&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weather_code,sunshine_duration'
+      +'&timezone=Asia%2FSeoul';
+  }
+  console.log('[Weather] 범위: '+startDate+' ~ '+endDate+(useArchive?' (Archive API)':' (Forecast API)'));
   console.log('[Weather] Open-Meteo 호출:', url);
 
   fetch(url)
@@ -6398,38 +6458,66 @@ function extractEXIF(file,cb){
     try{
       var buf=e.target.result;
       var data=new Uint8Array(buf);
-      if(data[0]!==0xFF||data[1]!==0xD8){cb(null,null,null);return;}
+      /* ★ v15.21: EXIF 진단 로그 강화 (촬영 시간 못 읽는 원인 찾기) */
+      console.log('[EXIF Debug] 파일:', file.name, '크기:', file.size, '바이트, 읽은 바이트:', data.length);
+      if(data[0]!==0xFF||data[1]!==0xD8){
+        console.warn('[EXIF Debug] ⚠ JPEG 시그니처 없음 (PNG/HEIC 등은 EXIF 미지원). 첫 2바이트:', 
+          '0x'+data[0].toString(16), '0x'+data[1].toString(16));
+        cb(null,null,null);return;
+      }
       var offset=2,little=false,lat=null,lon=null,dateStr=null;
+      var foundExifSegment=false;
       while(offset<data.length-2){
         if(data[offset]!==0xFF){break;}
         var marker=(data[offset]<<8)|data[offset+1];
         var segLen=(data[offset+2]<<8)|data[offset+3];
         if(marker===0xFFE1){
-          if(data[offset+4]===0x45&&data[offset+5]===0x78&&data[offset+6]===0x66&&data[offset+7]===0x66){
-            /* "Exif" 시그니처(0x45 0x78 0x69 0x66)는 위에 잘못 들어감 - 정상 패턴 사용 */
-          }
           if(data[offset+4]===0x45&&data[offset+5]===0x78&&data[offset+6]===0x69&&data[offset+7]===0x66){
+            foundExifSegment=true;
             var base=offset+10;
             little=(data[base]===0x49);
             var ifd0=base+readU32(data,base+4,little);
+            console.log('[EXIF Debug] ✓ EXIF 세그먼트 발견. 엔디안:', little?'little':'big', 'IFD0 offset:', ifd0);
             /* GPS 추출 (기존 로직) */
             var gpsOff=findGPSTag(data,ifd0,little,base);
-            if(gpsOff){var res=readGPSTags(data,gpsOff,little,base);lat=res.lat;lon=res.lon;}
-            /* ★ 촬영 시간 추출: IFD0 → ExifIFD(0x8769) → DateTimeOriginal(0x9003) */
+            if(gpsOff){var res=readGPSTags(data,gpsOff,little,base);lat=res.lat;lon=res.lon;
+              console.log('[EXIF Debug] ✓ GPS:', lat, lon);
+            } else {
+              console.log('[EXIF Debug] - GPS 태그 없음');
+            }
+            /* ★ 촬영 시간 추출 */
             var exifIFD=findExifIFDTag(data,ifd0,little,base);
             if(exifIFD){
+              console.log('[EXIF Debug] ✓ ExifIFD 포인터 발견:', exifIFD);
               dateStr=readDateTimeOriginal(data,exifIFD,little,base);
+              if(dateStr){
+                console.log('[EXIF Debug] ✓ DateTimeOriginal:', dateStr);
+              } else {
+                console.warn('[EXIF Debug] ⚠ ExifIFD는 있지만 DateTimeOriginal 태그(0x9003) 없음');
+              }
+            } else {
+              console.warn('[EXIF Debug] ⚠ ExifIFD 포인터 없음 (사진 앱이 메타 안 박았을 가능성)');
             }
           }
           break;
         }
         offset+=2+segLen;
       }
+      if(!foundExifSegment){
+        console.warn('[EXIF Debug] ⚠ APP1(EXIF) 세그먼트 못 찾음. 사진에 EXIF 메타 자체가 없을 수 있음');
+      }
       cb(lat,lon,dateStr);
-    }catch(ex){cb(null,null,null);}
+    }catch(ex){
+      console.error('[EXIF Debug] 파싱 예외:', ex);
+      cb(null,null,null);
+    }
   };
-  reader.onerror=function(){cb(null,null,null);};
-  reader.readAsArrayBuffer(file.slice(0,131072));
+  reader.onerror=function(){
+    console.error('[EXIF Debug] 파일 읽기 실패');
+    cb(null,null,null);
+  };
+  /* ★ v15.21: 읽는 크기 늘림 (128KB → 256KB) - 큰 사진은 EXIF가 뒤에 있을 수 있음 */
+  reader.readAsArrayBuffer(file.slice(0,262144));
 }
 
 /* ★ v15.20: IFD0에서 ExifIFD 포인터(tag 0x8769) 찾기 */
