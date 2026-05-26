@@ -9617,7 +9617,20 @@ document.getElementById('pc2').innerHTML=PP.c2.map(pCard).join('');
 document.getElementById('pc3').innerHTML=PP.c3.map(pCard).join('');
 
 /* ════ 초기화 ════ */
-document.getElementById('harvestDate').value=new Date().toISOString().slice(0,10);
+/* ★ v15.22: 페이지 로드 시 기본 오늘 날짜 + autoFilled 플래그
+   → EXIF 잡히면 그 위로 덮어쓸 수 있게 (사용자가 직접 바꾼 경우만 보존) */
+(function(){
+  var hInput=document.getElementById('harvestDate');
+  if(hInput){
+    hInput.value=new Date().toISOString().slice(0,10);
+    hInput.dataset.autoFilled='1';
+    /* 사용자가 직접 바꾸면 플래그 해제 → 그 후로는 EXIF가 덮어쓰지 않음 */
+    hInput.addEventListener('change',function(){
+      this.dataset.autoFilled='';
+      console.log('[harvestDate] 사용자 직접 변경 - autoFilled 해제');
+    });
+  }
+})();
 /* 수확일 안내 업데이트 */
 (function(){
   var d=new Date();
