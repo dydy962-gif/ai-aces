@@ -1387,13 +1387,7 @@ function hideKreiSplash(){
         <button class="mode-btn" id="varHongro" onclick="setVariety('hongro')">🌹 홍로<br><span style="font-size:10px;opacity:.7">8월말~9월 수확</span></button>
       </div>
 
-      <!-- 수확일 선택 -->
-      <div class="section-label">수확일 선택</div>
-      <div class="harvest-date">
-        <label>수확일</label>
-        <input type="date" id="harvestDate" onchange="onHarvestDateChange()">
-        <span style="font-size:11px;color:var(--muted)" id="dateInfo">날짜 선택 시 2주 전 날씨 조회</span>
-      </div>
+      <!-- 수확일 선택 제거됨 (v15.32): 날씨는 사진 촬영일 기준으로 자동 계산 -->
 
       <!-- 촬영 모드 선택 (항목11) -->
       <div class="section-label">촬영 방식 선택</div>
@@ -4595,7 +4589,7 @@ function saveBoxResult(){
     date: (p && p.captureDate) ? p.captureDate : new Date().toISOString().slice(0,10),
     /* 촬영 시간 출처 표시 (디버깅/검증용) */
     dateSource: (p && p.captureDate) ? 'EXIF' : 'now',
-    harvestDate: document.getElementById('harvestDate').value||'',
+    harvestDate: (document.getElementById('harvestDate')||{}).value||'',
     pct: r.avgPct,
     grade: r.avgGrade,
     gradeName: r.avgGradeName,
@@ -5643,7 +5637,9 @@ var currentAddress='';
 
 /* ── 수확일 변경 ── */
 function onHarvestDateChange(){
-  var v=document.getElementById('harvestDate').value;
+  var hEl=document.getElementById('harvestDate');
+  if(!hEl) return; /* ★ v15.32: 수확일 칸 제거됨 — 없으면 종료 */
+  var v=hEl.value;
   if(!v) return;
   var d=new Date(v);
   var past=new Date(d);past.setDate(past.getDate()-14);
@@ -5964,7 +5960,7 @@ function loadWeatherGrid(lat,lon){
   }
   /* 2) 없으면 harvestDate input */
   if(!targetDate){
-    var harvestVal = document.getElementById('harvestDate').value;
+    var harvestVal = (document.getElementById('harvestDate')||{}).value;
     if(harvestVal && /^\d{4}-\d{2}-\d{2}$/.test(harvestVal)){
       targetDate = harvestVal;
       console.log('[Weather] 기준일 = harvestDate input:', targetDate);
@@ -8902,7 +8898,7 @@ function saveResultData(res){
   var record={
     id:Date.now(),
     date:new Date().toISOString().slice(0,10),
-    harvestDate:document.getElementById('harvestDate').value||'',
+    harvestDate:(document.getElementById('harvestDate')||{}).value||'',
     pct:res.avg,
     grade:res.avgCard.l,
     gradeName:res.avgCard.name,
@@ -9850,9 +9846,11 @@ document.getElementById('pc3').innerHTML=PP.c3.map(pCard).join('');
 })();
 /* 수확일 안내 업데이트 */
 (function(){
+  var diEl=document.getElementById('dateInfo');
+  if(!diEl) return; /* ★ v15.32: 수확일 칸 제거됨 */
   var d=new Date();
   var past=new Date(d);past.setDate(past.getDate()-14);
-  document.getElementById('dateInfo').textContent=(past.getMonth()+1)+'월'+(past.getDate())+'일 ~ '+(d.getMonth()+1)+'월'+(d.getDate())+'일';
+  diEl.textContent=(past.getMonth()+1)+'월'+(past.getDate())+'일 ~ '+(d.getMonth()+1)+'월'+(d.getDate())+'일';
 })();
 
 document.addEventListener('DOMContentLoaded',function(){
