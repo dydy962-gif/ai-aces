@@ -1545,7 +1545,7 @@ function hideKreiSplash(){
         </div>
 
         <!-- 날씨 2주 요약 (항목6) -->
-        <div class="section-label" style="margin-bottom:5px">수확일 기준 2주 평균 날씨</div>
+        <div class="section-label" style="margin-bottom:5px">촬영일(사진) 기준 2주 평균 날씨</div>
         <div class="weather-summary" id="weatherSummary" style="display:none">
           <div class="ws-title" id="wsSummaryTitle">2주 평균</div>
           <div class="ws-grid">
@@ -5914,8 +5914,14 @@ function attachRecordWeather(record){
     fetchWeatherForRecord(record.lat, record.lon, record.date, function(summary){
       if(!summary) return;
       record.weather = summary;
-      try { if(typeof records!=='undefined') saveAllRecords(records); } catch(e){}
-      console.log('[Weather/Record] '+record.date+' 적용: 최고'+summary.avgMax+'° 최저'+summary.avgMin+'° 일조'+summary.sunHours+'h/일');
+      /* ★ v15.30: records가 함수별 지역변수라, 저장소에서 다시 불러와 id로 찾아 저장해야 함 */
+      try {
+        var all = (typeof loadAllRecords==='function') ? loadAllRecords() : [];
+        var hit = false;
+        for(var i=0;i<all.length;i++){ if(all[i].id===record.id){ all[i].weather=summary; hit=true; break; } }
+        if(hit && typeof saveAllRecords==='function') saveAllRecords(all);
+        console.log('[Weather/Record] '+record.date+' 적용'+(hit?'·저장완료':'(레코드 못찾음)')+': 최고'+summary.avgMax+'° 최저'+summary.avgMin+'° 일조'+summary.sunHours+'h/일');
+      } catch(e){ console.warn('[Weather/Record] 저장 실패:', e); }
       /* 기록 탭이 열려 있으면 묶어서 한 번만 다시 그리기 */
       if(window._recWxRenderTimer) clearTimeout(window._recWxRenderTimer);
       window._recWxRenderTimer = setTimeout(function(){
@@ -5923,6 +5929,21 @@ function attachRecordWeather(record){
       }, 800);
     });
   }, delay);
+}
+
+/* ★ v15.30: 기존 레코드 중 날씨 누락분을 자동 보충 (id/date/lat/lon 있는 것만, 1회) */
+function backfillMissingWeather(){
+  if(window._wxBackfillDone) return;
+  window._wxBackfillDone = true;
+  try{
+    var all = (typeof loadAllRecords==='function') ? loadAllRecords() : [];
+    var n=0;
+    for(var i=0;i<all.length;i++){
+      var r=all[i];
+      if((!r.weather) && r.date && r.lat && r.lon){ attachRecordWeather(r); n++; }
+    }
+    if(n>0) console.log('[Weather/Record] 누락 날씨 '+n+'건 불러오는 중... (잠시 후 기록·엑셀에 반영)');
+  }catch(e){ console.warn('[Weather/Record] 보충 실패:', e); }
 }
 
 function loadWeatherGrid(lat,lon){
@@ -5936,16 +5957,18 @@ function loadWeatherGrid(lat,lon){
      변경: 수확일 우선 → 현재 사진의 captureDate → 오늘 폴백
      start_date, end_date로 정확한 날짜 범위 지정 */
   var targetDate = null;
-  /* 1) harvestDate input 값 우선 */
-  var harvestVal = document.getElementById('harvestDate').value;
-  if(harvestVal && /^\d{4}-\d{2}-\d{2}$/.test(harvestVal)){
-    targetDate = harvestVal;
-    console.log('[Weather] 기준일 = harvestDate input:', targetDate);
-  }
-  /* 2) 현재 선택 사진의 EXIF 촬영일 */
-  if(!targetDate && typeof aIdx !== 'undefined' && aIdx >= 0 && photos[aIdx] && photos[aIdx].captureDate){
+  /* ★ v15.31: 선택한 사진의 촬영일 우선 — 사진을 클릭하면 그 사진 날짜로 패널이 바뀜 */
+  if(typeof aIdx !== 'undefined' && aIdx >= 0 && photos[aIdx] && photos[aIdx].captureDate){
     targetDate = photos[aIdx].captureDate;
-    console.log('[Weather] 기준일 = 사진 EXIF captureDate:', targetDate);
+    console.log('[Weather] 기준일 = 선택 사진 촬영일:', targetDate);
+  }
+  /* 2) 없으면 harvestDate input */
+  if(!targetDate){
+    var harvestVal = document.getElementById('harvestDate').value;
+    if(harvestVal && /^\d{4}-\d{2}-\d{2}$/.test(harvestVal)){
+      targetDate = harvestVal;
+      console.log('[Weather] 기준일 = harvestDate input:', targetDate);
+    }
   }
   /* 3) 폴백 = 오늘 */
   if(!targetDate){
@@ -5993,8 +6016,7 @@ function loadWeatherGrid(lat,lon){
       }
       weatherCache=d.daily;
       weatherCache._source='Open-Meteo';
-      var harvestVal=document.getElementById('harvestDate').value;
-      renderWeatherGrid(d.daily,harvestVal||new Date().toISOString().slice(0,10));
+      renderWeatherGrid(d.daily, endDate); /* ★ v15.31: 촬영일(기준일)을 강조 */
       renderWeatherSummary(d.daily);
       if(emptyEl) emptyEl.style.display='none';
       /* 데이터 출처 표시 — Open-Meteo */
@@ -8947,6 +8969,7 @@ function onSaveResultClick(){
 /* ════ 기록 탭 렌더링 (항목9) ════ */
 function renderRecordsPage(){
   var records=loadAllRecords();
+  if(typeof backfillMissingWeather==='function') backfillMissingWeather(); /* ★ 누락 날씨 보충(1회) */
   var tabsEl=document.getElementById('recRegionTabs');
   var contentEl=document.getElementById('recContent');
   if(!tabsEl||!contentEl) return;
@@ -9791,7 +9814,7 @@ var PP={
     {code:'K001',title:'변색단계별 ‘홍로’ 사과 착색 및 당 축적 유전자 발현',authors:'국립원예특작과학원',journal:'한국원예학회 (KoreaScience)',year:2016,note:'착색 단계가 진행될수록 당 합성 유전자 발현 증가 — 착색과 당도 연관 근거.',doi:'https://www.koreascience.kr/article/JAKO201614652522053.pdf',pdf:null,r:null,kr:true},
     {code:'K002',title:'봉지 제거 시기가 후지 착색에 미치는 영향',authors:'Lee et al.',journal:'원예과학기술지',year:2022,note:'국내 봉지 제거 시기별 착색률 변화.',doi:'https://cdn.apub.kr/journalsite/sites/kshs/2022-040-02/N0130400208/N0130400208.pdf',pdf:'https://cdn.apub.kr/journalsite/sites/kshs/2022-040-02/N0130400208/N0130400208.pdf',r:null,kr:true},
     {code:'K003',title:'착색을 좋게 하는 사과 과원관리 기술 (온도·일조)',authors:'농촌진흥청 국립원예특작과학원',journal:'농사로 (RDA)',year:2020,note:'안토시아닌 생성 적온 15~20℃, 일교차·일조가 착색 좌우. 날씨 연계 근거.',doi:'https://www.rda.go.kr/middlePopOpenPopNongsaroDBView.do?no=1047&sj=%EC%83%89%EA%B9%94',pdf:null,r:null,kr:true},
-    {code:'K004',title:'반사필름 피복이 사과 착색에 미치는 영향',authors:'Kim et al.',journal:'원예과학기술지',year:2021,note:'꼭지·경와부 착색 지연 확인.',doi:'https://doi.org/10.7235/HORT.20210076',pdf:null,r:null,kr:true},
+    {code:'K004',title:'색깔 좋은 사과 만드는 과원관리 (봉지·반사필름·잎따기)',authors:'농촌진흥청 국립원예특작과학원',journal:'농사로 (Nongsaro)',year:2020,note:'봉지 제거 시기·반사필름·잎 따주기가 착색에 미치는 영향. 현장 적용 근거.',doi:'https://www.nongsaro.go.kr/portal/ps/psv/psvr/psvre/curationDtl.ps?menuId=PS03352&srchCurationNo=1047',pdf:null,r:null,kr:true},
     {code:'K005',title:'고온 처리 사과 전사체 — 안토시아닌 억제 기작',authors:'Han et al.',journal:'Int. J. Mol. Sci. (PMC)',year:2022,note:'35℃ 고온이 착색(안토시아닌)을 억제. 기후·고온 영향 최신 근거.',doi:'https://pmc.ncbi.nlm.nih.gov/articles/PMC8998508/',pdf:null,r:null,kr:true}
   ]
 };
